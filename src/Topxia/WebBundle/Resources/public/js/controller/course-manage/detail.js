@@ -2,13 +2,13 @@ define(function(require, exports, module) {
 
     var DynamicCollection = require('../widget/dynamic-collection4');
     require('jquery.sortable');
-    require('ckeditor');
+    require('es-ckeditor');
 
     exports.run = function() {
-        require('./header').run();
 
         // group:'course'
         CKEDITOR.replace('course-about-field', {
+            allowedContent: true,
             toolbar: 'Detail',
             filebrowserImageUploadUrl: $('#course-about-field').data('imageUploadUrl')
         });

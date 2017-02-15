@@ -1,7 +1,6 @@
 define(function(require, exports, module) {
 
     (function($) {
-
         $.fn.WaterMark = function(options) {
             var settings = $.extend({
                 'duringTime': 5 * 60 * 1000,
@@ -144,6 +143,7 @@ define(function(require, exports, module) {
 
     var Widget = require('widget');
     var swfobject = require('swfobject');
+    var docPlayer;
     window.onmessage=function(e){  
         if(e == null || e == undefined ){
             return;
@@ -152,7 +152,7 @@ define(function(require, exports, module) {
         if(typeof(isPageFullScreen) != "boolean"){
             return ;
         }
-        var docContent = document.getElementById("lesson-document-content");
+        var docContent = document.getElementById(docPlayer);
         if (isPageFullScreen) {
           docContent.removeAttribute("style");
         }else{
@@ -180,16 +180,14 @@ define(function(require, exports, module) {
 
         setup: function() {
             var self = this;
-
+            docPlayer = $(this.element).attr("id");
             self.init(this.element);
-
         },
 
         init: function ($thiz) {
 
             if (this.isSupportHtml5() && !this.isIE9()) {
                 this.initPDFJSViewer($thiz);
-           
             }else{
                 this.initSwfViewer($thiz);
             }
@@ -207,7 +205,7 @@ define(function(require, exports, module) {
         initPDFJSViewer: function($thiz) {
             self=this;
             $("html").attr('dir','ltr');
-            var jsPath = 'http://opencdn.edusoho.net/pdf.js/v3/viewer.html#'+self.attrs.pdfFileUrl.value;
+            var jsPath = 'http://opencdn.edusoho.net/pdf.js/v7/viewer.html#'+self.attrs.pdfFileUrl.value;
             if(app.lessonCopyEnabled==0){
                 jsPath = jsPath+'#false';
             }
@@ -221,7 +219,7 @@ define(function(require, exports, module) {
 
         initSwfViewer: function($thiz){
 
-            $thiz.html('<div id="website"><p align="center" class="style1">您还没有安装flash播放器 请点击<a href="http://www.adobe.com/go/getflashplayer">这里</a>安装</p></div>');
+            $thiz.html('<div id="website"><p align="center" class="style1">'+Translator.trans('您还没有安装flash播放器 请点击')+'<a href="http://www.adobe.com/go/getflashplayer">'+Translator.trans('这里')+'</a>'+Translator.trans('安装')+'</p></div>');
             var flashvars = {
               doc_url: escape(this.attrs.swfFileUrl.value) 
             };

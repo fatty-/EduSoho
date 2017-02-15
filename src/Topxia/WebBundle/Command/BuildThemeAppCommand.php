@@ -4,17 +4,21 @@ namespace Topxia\WebBundle\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Input\InputArgument;
-
 use Symfony\Component\Filesystem\Filesystem;
-use Symfony\Component\Finder\Finder;
 use Topxia\Common\BlockToolkit;
-use Topxia\System;
 use ZipArchive;
 
 class BuildThemeAppCommand extends BaseCommand
 {
-
+    /**
+     * @var OutputInterface
+     */
     protected $output;
+
+    /**
+     * @var Filesystem
+     */
+    protected $filesystem;
 
     protected function configure()
     {
@@ -24,6 +28,7 @@ class BuildThemeAppCommand extends BaseCommand
 
     protected function execute(InputInterface $input, OutputInterface $output)
     {
+        $this->initServiceKernel();
         $this->output = $output;
         $this->filesystem = new Filesystem();
         $name = $input->getArgument('name');
@@ -99,25 +104,6 @@ class BuildThemeAppCommand extends BaseCommand
         $this->filesystem->copy($source, $target);
     }
 
-    private function _zipPackage($distDir)
-    {
-        $buildDir = dirname($distDir);
-        $filename = basename($distDir);
-
-        if ($this->filesystem->exists("{$buildDir}/{$filename}.zip")) {
-            $this->filesystem->remove("{$buildDir}/{$filename}.zip");
-        }
-
-        $this->output->writeln("<info>    * 制作ZIP包：{$buildDir}/{$filename}.zip</info>");
-
-        chdir($buildDir);
-        $command = "zip -r {$filename}.zip {$filename}/";
-        exec($command);
-
-        $zipPath = "{$buildDir}/{$filename}.zip";
-        $this->output->writeln("<question>    * ZIP包大小：" . intval(filesize($zipPath)/1024) . ' Kb');
-    }
-
     private function _zip($distDir)
     {   
         $buildDir = dirname($distDir);
@@ -136,7 +122,7 @@ class BuildThemeAppCommand extends BaseCommand
         $z->close(); 
     }
 
-    private static function folderToZip($folder, &$zipFile, $exclusiveLength) { 
+    private static function folderToZip($folder, ZipArchive &$zipFile, $exclusiveLength) {
 
         $handle = opendir($folder); 
         while (false !== $f = readdir($handle)) { 
@@ -203,5 +189,4 @@ class BuildThemeAppCommand extends BaseCommand
 
         return $themeDir;
     }
-
 }

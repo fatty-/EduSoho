@@ -71,7 +71,10 @@ class OrderRefundDaoImpl extends BaseDao implements OrderRefundDao
                     ->andWhere('targetType = :targetType')
                     ->andWhere('orderId = :orderId')
                     ->andWhere('targetType = :targetType')
-                    ->andWhere('targetId IN ( :courseIds )');
+                    ->andWhere('userId IN ( :userIds )')
+                    ->andWhere('targetId = :targetId')
+                    ->andWhere('status <> :statusNotEqual')
+                    ->andWhere('targetId IN ( :targetIds )');
                     
 
         if (isset($conditions['targetIds'])) {
@@ -89,6 +92,12 @@ class OrderRefundDaoImpl extends BaseDao implements OrderRefundDao
         $marks = str_repeat('?,', count($ids) - 1) . '?';
         $sql ="SELECT * FROM {$this->table} WHERE id IN ({$marks});";
         return  $this->getConnection()->fetchAll($sql, $ids);
+    }
+
+    public function findRefundByOrderId($orderId)
+    {
+        $sql = " SELECT * FROM {$this->table} WHERE orderId = ? LIMIT 1";
+        return $this->getConnection()->fetchAssoc($sql, array($orderId));
     }
 
 }

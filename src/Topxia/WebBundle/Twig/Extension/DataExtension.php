@@ -15,6 +15,8 @@ class DataExtension extends \Twig_Extension
             new \Twig_SimpleFunction('datas', array($this, 'getDatas'), $options),
             new \Twig_SimpleFunction('datas_count', array($this, 'getDatasCount'), $options),
             new \Twig_SimpleFunction('service', array($this, 'callService'), $options),
+            new \Twig_SimpleFunction('isOldSmsUser', array($this, 'getOldSmsUserStatus'), $options),
+            new \Twig_SimpleFunction('cloudStatus', array($this, 'getCloudStatus'), $options),
         );
     }
 
@@ -28,25 +30,39 @@ class DataExtension extends \Twig_Extension
     {
         $method = 'get' . ucfirst($name) . 'Datas';
         if (!method_exists($this, $method)) {
-            throw new \RuntimeException("尚未定义批量获取'{$name}'数据");
+            throw new \RuntimeException($this->getServiceKernel()->trans('尚未定义批量获取"%name%"数据', array('%name%' =>$name )));
         }
         return $this->{$method}($conditions, $sort, $start, $limit);
     }
 
-    public function getDatasCount($conditions)
+    public function getDatasCount($name, $conditions)
     {
         $method = 'get' . ucfirst($name) . 'DatasdeCount';
         if (!method_exists($this, $method)) {
-            throw new \RuntimeException("尚未定义获取'{$name}'数据的记录条数");
+            throw new \RuntimeException($this->getServiceKernel()->trans('尚未定义获取"%name%"数据的记录条数', array('%name%' =>$name )));
         }
-        return $this->{$method}($condihtions);
+        return $this->{$method}($conditions);
     }
 
+    public function getOldSmsUserStatus()
+    {
+        return $this->getEduCloudService()->getOldSmsUserStatus();
+    }
+
+    /**
+     * @deprecated  即将废弃，不要再使用
+     *
+     */
     public function callService($name, $method, $arguments)
     {
         $service = $this->createService($name);
         $reflectionClass = new \ReflectionClass($service);
         return $reflectionClass->getMethod($method)->invokeArgs($service, $arguments);
+    }
+
+    public function getCloudStatus()
+    {
+        return $this->getEduCloudService()->isHiddenCloud();
     }
 
     public function getName ()
@@ -85,6 +101,11 @@ class DataExtension extends \Twig_Extension
         return $this->createService('Course.CourseService');
     }
 
+    private function getEduCloudService()
+    {
+        return $this->getServiceKernel()->createService('CloudPlatform.EduCloudService');
+    }
+
     private function getUserService()
     {
         return $this->createService('User.UserService');
@@ -95,5 +116,8 @@ class DataExtension extends \Twig_Extension
     {
         return ServiceKernel::instance()->createService($name);
     }
-
+    protected function getServiceKernel()
+    {
+        return ServiceKernel::instance();
+    }
 }

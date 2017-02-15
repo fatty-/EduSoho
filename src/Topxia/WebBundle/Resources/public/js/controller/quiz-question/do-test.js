@@ -6,7 +6,7 @@ define(function(require, exports, module) {
     require('common/validator-rules').inject(Validator);
     var Notify = require('common/bootstrap-notify');
 
-    require('ckeditor');
+    require('es-ckeditor');
     require('../widget/document-player');
 
     var AudioPlayer = require('./audioplayer');
@@ -36,56 +36,6 @@ define(function(require, exports, module) {
                 })
             });
         }
-   
-
-        $('#testpaper-navbar').affix({
-            offset: {
-              top: 200
-            }
-
-        });
-
-     $(".testpaper-card").find(".panel-body").css({"height": "auto","overflow": "hidden"});
-  
-      if ($('#testpaper-navbar').length > 0) {
-            var $navbarTop=$('#testpaper-navbar').offset().top;
-            $(window).scroll(function(){
-         
-            if ($('#testpaper-navbar').offset().top > $navbarTop) {
-                var $cardFooterHeight= $(".testpaper-card").find('.panel-footer').css('height').replace('px','');
-                var $cardHeadingHeight= $(".testpaper-card").find('.panel-heading').css('height').replace('px','');
-                var $testpaperNavbarHeight= $(".testpaper-card").find('.panel-heading').css('height').replace('px','');
-                    $(".testpaper-card").find(".panel-body").css({"max-height":$(window).height()-$cardFooterHeight-$cardHeadingHeight-$testpaperNavbarHeight-40,"height": "auto","overflow": "auto"});
-                } else {
-                    $(".testpaper-card").find(".panel-body").scrollTop(0);
-                     $(".testpaper-card").find(".panel-body").css({"height": "auto","overflow": "hidden"});
-                }
-            });
-
-            $('.testpaper-card').affix({
-                offset: {
-                  top: 200
-                }
-            });
-      } else {
-        var $testpaperHeadingHeight=$('.testpaper-heading').height();
-
-        $(window).scroll(function(){
-            if ($(window).scrollTop() > $testpaperHeadingHeight) {
-                var $cardFooterHeight= $(".testpaper-card").find('.panel-footer').css('height').replace('px','');
-                $(".testpaper-card").find(".panel-body").css({"max-height":$(window).height()-$cardFooterHeight-80,"height": "auto","overflow": "auto"});
-            } else {
-                $(".testpaper-card").find(".panel-body").scrollTop(0);
-                 $(".testpaper-card").find(".panel-body").css({"height": "auto","overflow": "hidden"});
-            }
-        });
-
-        $('.testpaper-card').affix({
-            offset: {
-              top: 400
-            }
-        });
-      }
 
 
         $('.testpaper-card').on('click', '.btn-index', function() {
@@ -106,7 +56,7 @@ define(function(require, exports, module) {
         });
 
 // 做试卷
-        var interval = 600;
+        var interval = 60;
 
         var changeAnswers = {};
 
@@ -151,8 +101,8 @@ define(function(require, exports, module) {
                             $('#timeout-dialog').show();
                             timer.stop();
                         }).error(function(){
-                            $('#timeout-dialog').find('.empty').text('系统好像出了点小问题，请稍后再交卷');
-                            $('#timeout-dialog').find('#show_testpaper_result').text('确定');
+                            $('#timeout-dialog').find('.empty').text(Translator.trans('系统好像出了点小问题，请稍后再交卷'));
+                            $('#timeout-dialog').find('#show_testpaper_result').text(Translator.trans('确定'));
                             $('#timeout-dialog').show();
                             timer.stop();
                         });
@@ -165,8 +115,8 @@ define(function(require, exports, module) {
                                     usedTime = 0;
                                     $('#timeout-dialog').show();
                                 }).error(function(){
-                                    $('#timeout-dialog').find('.empty').text('系统好像出了点小问题，请稍后再交卷');
-                                    $('#timeout-dialog').find('#show_testpaper_result').text('确定');
+                                    $('#timeout-dialog').find('.empty').text(Translator.trans('系统好像出了点小问题，请稍后再交卷'));
+                                    $('#timeout-dialog').find('#show_testpaper_result').text(Translator.trans('确定'));
                                     $('#timeout-dialog').show();
                                 });
                             }
@@ -451,7 +401,7 @@ define(function(require, exports, module) {
             var $textareaBtn = $shortTextarea.parent().find('.testpaper-question-essay-input-btn').show();
 
             var editor = CKEDITOR.replace($longTextarea.attr('id'), {
-                toolbar: 'Simple',
+                toolbar: 'Minimal',
                 filebrowserImageUploadUrl: $longTextarea.data('imageUploadUrl')
             });
 
@@ -506,7 +456,7 @@ define(function(require, exports, module) {
 
 
             var editor = CKEDITOR.replace($longTextarea.attr('id'), {
-                toolbar: 'Simple',
+                toolbar: 'Thread',
                 filebrowserImageUploadUrl: $longTextarea.data('imageUploadUrl')
             });
 
@@ -557,7 +507,7 @@ define(function(require, exports, module) {
                 } else {
                     return false;
                 }
-            }, '{{display}}只能是<=题目分数、且>=0的整数或者1位小数');
+            }, Translator.trans('%display%只能是<=题目分数、且>=0的整数或者1位小数',{display:'{{display}}'}));
         }
 
         $('[name^="score_"]').each(function(){
@@ -566,7 +516,7 @@ define(function(require, exports, module) {
                 element: '[name='+name+']',
                 required: true,
                 rule: 'score',
-                display: '得分'
+                display: Translator.trans('得分')
             });
         });
 
@@ -575,6 +525,16 @@ define(function(require, exports, module) {
                 if (error) {
                     return false;
                 }
+
+                var scoreTotal = 0;
+                $('[name^="score_"]').each(function(){
+                    var score = $(this).val();
+                    scoreTotal = scoreTotal + Number(score);
+                });
+                var subjectiveScore = Number($('[name="objectiveScore"]').val());
+                var totalScore = Number(scoreTotal) + subjectiveScore;
+
+                $("#totalScore").html(totalScore);
                 $('#testpaper-checked-dialog').modal('show');
             });
         });
@@ -589,13 +549,16 @@ define(function(require, exports, module) {
         });
 
         $('#testpaper-teacherSay-btn').on('click', function(){
-            val = $('#testpaper-teacherSay-input').val();
+            var val = $('#testpaper-teacherSay-input').val();
             $('#teacherSay').val(val);
 
+            var passedStatus = $('input[type="radio"][name="passedStatus"]:checked').val();
+            $('#passedStatus').val(passedStatus);
             $form = $('#teacherCheckForm');
 
             $.post($('#testpaper-teacherSay-btn').data('post-url'), $form.serialize(), function(response) {
-                window.location.href = $('#testpaper-teacherSay-btn').data('goto');
+                //window.location.href = $('#testpaper-teacherSay-btn').data('goto');
+                window.location.reload();
             })
         });
 

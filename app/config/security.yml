@@ -1,14 +1,7 @@
 services:
     topxia.user_provider:
         class: Topxia\Service\User\UserProvider
-        arguments:    [@service_container]
-
-    security.access.blacklist_voter:
-        class:      Topxia\WebBundle\Security\Voter\ClientIpVoter
-        arguments:  [@service_container]
-        public:     false
-        tags:
-            - { name: security.voter }
+        arguments:    ['@service_container']
 
     topxia.authentication.failure_handler:
         class: Topxia\WebBundle\Handler\AuthenticationFailureHandler
@@ -21,10 +14,9 @@ services:
         class: Topxia\WebBundle\Handler\LogoutSuccessHandler
         parent: security.logout.success_handler
 
-
     user.login_listener:
         class: Topxia\WebBundle\Handler\LoginSuccessHandler
-        arguments: ['@security.context', '@doctrine']
+        arguments: ['@security.authorization_checker']
         tags: [{ name: kernel.event_listener, event: security.interactive_login }]
 
     user.login_generate_notification_handler:
@@ -40,7 +32,7 @@ security:
         custom_provider:
             id: topxia.user_provider
 
-    role_hierarchy: %role_hierarchy%
+    role_hierarchy: "%role_hierarchy%"
 
     firewalls:
         dev:
@@ -56,7 +48,7 @@ security:
                 failure_handler: topxia.authentication.failure_handler
                 success_handler: topxia.authentication.success_handler
             remember_me:
-                key: "%secret%"
+                secret: "%secret%"
                 lifetime: 31536000
                 path: /
                 domain: ~
@@ -70,13 +62,13 @@ security:
         - { path: ^/settings, role: ROLE_USER }
         # - { path: ^/note, role: ROLE_USER }
         - { path: ^/message, role: ROLE_USER }
-        - { path: ^/admin/course, role: ROLE_ADMIN }
-        - { path: ^/admin/user, role: ROLE_ADMIN }
-        - { path: ^/admin/app, role: ROLE_ADMIN }
-        - { path: ^/admin/setting, role: ROLE_SUPER_ADMIN }
-        - { path: ^/admin/logs, role: ROLE_SUPER_ADMIN }
-        - { path: ^/admin/upgrade, role: ROLE_SUPER_ADMIN }
-        - { path: ^/admin/optimize, role: ROLE_SUPER_ADMIN }
+        - { path: ^/admin/course, role: ROLE_BACKEND }
+        - { path: ^/admin/user, role: ROLE_BACKEND }
+        - { path: ^/admin/app, role: ROLE_BACKEND }
+        - { path: ^/admin/setting, role: ROLE_BACKEND }
+        - { path: ^/admin/logs, role: ROLE_BACKEND }
+        - { path: ^/admin/upgrade, role: ROLE_BACKEND }
+        - { path: ^/admin/optimize, role: ROLE_BACKEND }
         - { path: ^/admin, role: ROLE_BACKEND }
         - { path: /.*, role: IS_AUTHENTICATED_ANONYMOUSLY }
         #- { path: ^/_internal, roles: IS_AUTHENTICATED_ANONYMOUSLY, ip: 127.0.0.1 }

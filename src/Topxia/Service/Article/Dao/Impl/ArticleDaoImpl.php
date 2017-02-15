@@ -8,13 +8,11 @@ class ArticleDaoImpl extends BaseDao implements ArticleDao
 {
     protected $table = 'article';
 
-    private $serializeFields = array(
-        'tagIds' => 'saw',
-    );
+    private $serializeFields = array();
 
     public function getArticle($id)
     {
-        $sql = "SELECT * FROM {$this->table} WHERE id = ? LIMIT 1";
+        $sql     = "SELECT * FROM {$this->table} WHERE id = ? LIMIT 1";
         $article = $this->getConnection()->fetchAssoc($sql, array($id)) ?: null;
 
         return $article ? $this->createSerializer()->unserialize($article, $this->serializeFields) : null;
@@ -22,7 +20,7 @@ class ArticleDaoImpl extends BaseDao implements ArticleDao
 
     public function getArticlePrevious($categoryId, $createdTime)
     {
-        $sql = "SELECT * FROM {$this->table} WHERE `categoryId` = ? AND createdTime < ? ORDER BY `createdTime` DESC LIMIT 1";
+        $sql     = "SELECT * FROM {$this->table} WHERE `categoryId` = ? AND createdTime < ? ORDER BY `createdTime` DESC LIMIT 1";
         $article = $this->getConnection()->fetchAssoc($sql, array($categoryId, $createdTime) ?: null);
 
         return $article ? $this->createSerializer()->unserialize($article, $this->serializeFields) : null;
@@ -30,15 +28,15 @@ class ArticleDaoImpl extends BaseDao implements ArticleDao
 
     public function getArticleNext($categoryId, $createdTime)
     {
-        $sql = "SELECT * FROM {$this->table} WHERE  `categoryId` = ? AND createdTime > ? ORDER BY `createdTime` ASC LIMIT 1";
-        $article =  $this->getConnection()->fetchAssoc($sql, array($categoryId, $createdTime) ?: null);
+        $sql     = "SELECT * FROM {$this->table} WHERE  `categoryId` = ? AND createdTime > ? ORDER BY `createdTime` ASC LIMIT 1";
+        $article = $this->getConnection()->fetchAssoc($sql, array($categoryId, $createdTime) ?: null);
 
         return $article ? $this->createSerializer()->unserialize($article, $this->serializeFields) : null;
     }
 
     public function getArticleByAlias($alias)
     {
-        $sql = "SELECT * FROM {$this->table} WHERE alias = ? LIMIT 1";
+        $sql     = "SELECT * FROM {$this->table} WHERE alias = ? LIMIT 1";
         $article = $this->getConnection()->fetchAssoc($sql, array($alias));
 
         return $article ? $this->createSerializer()->unserialize($article, $this->serializeFields) : null;
@@ -49,16 +47,17 @@ class ArticleDaoImpl extends BaseDao implements ArticleDao
         if (empty($ids)) {
             return array();
         }
-        $marks = str_repeat('?,', count($ids) - 1).'?';
-        $sql = "SELECT * FROM {$this->table} WHERE id IN ({$marks});";
-        $articles =  $this->getConnection()->fetchAll($sql, $ids);
+
+        $marks    = str_repeat('?,', count($ids) - 1) . '?';
+        $sql      = "SELECT * FROM {$this->table} WHERE id IN ({$marks});";
+        $articles = $this->getConnection()->fetchAll($sql, $ids);
 
         return $articles ? $this->createSerializer()->unserializes($articles, $this->serializeFields) : array();
     }
 
     public function findAllArticles()
     {
-        $sql = "SELECT * FROM {$this->table};";
+        $sql      = "SELECT * FROM {$this->table};";
         $articles = $this->getConnection()->fetchAll($sql, array());
         return $articles ? $this->createSerializer()->unserializes($articles, $this->serializeFields) : array();
     }
@@ -71,8 +70,8 @@ class ArticleDaoImpl extends BaseDao implements ArticleDao
             return array();
         }
 
-        $marks = str_repeat('?,', count($categoryIds) - 1).'?';
-        $sql = "SELECT * FROM {$this->table} WHERE categoryId in ({$marks}) ORDER BY createdTime DESC LIMIT {$start}, {$limit}";
+        $marks = str_repeat('?,', count($categoryIds) - 1) . '?';
+        $sql   = "SELECT * FROM {$this->table} WHERE categoryId in ({$marks}) ORDER BY createdTime DESC LIMIT {$start}, {$limit}";
 
         $artilces = $this->getConnection()->fetchAll($sql, $categoryIds);
 
@@ -84,8 +83,9 @@ class ArticleDaoImpl extends BaseDao implements ArticleDao
         if (empty($categoryIds)) {
             return array();
         }
-        $marks = str_repeat('?,', count($categoryIds) - 1).'?';
-        $sql = "SELECT COUNT(id) FROM {$this->table} WHERE categoryId in ({$marks})";
+
+        $marks = str_repeat('?,', count($categoryIds) - 1) . '?';
+        $sql   = "SELECT COUNT(id) FROM {$this->table} WHERE categoryId in ({$marks})";
 
         return $this->getConnection()->fetchColumn($sql, $categoryIds);
     }
@@ -99,6 +99,7 @@ class ArticleDaoImpl extends BaseDao implements ArticleDao
             ->select('*')
             ->setFirstResult($start)
             ->setMaxResults($limit);
+
         foreach ($orderBys as $orderBy) {
             $builder->addOrderBy($orderBy[0], $orderBy[1]);
         }
@@ -118,8 +119,12 @@ class ArticleDaoImpl extends BaseDao implements ArticleDao
 
     public function addArticle($article)
     {
-        $article = $this->createSerializer()->serialize($article, $this->serializeFields);
+        $article['createdTime'] = time();
+        $article['updatedTime'] = $article['createdTime'];
+        $article                = $this->createSerializer()->serialize($article, $this->serializeFields);
+
         $affected = $this->getConnection()->insert($this->table, $article);
+
         if ($affected <= 0) {
             throw $this->createDaoException('Insert Article error.');
         }
@@ -129,19 +134,22 @@ class ArticleDaoImpl extends BaseDao implements ArticleDao
 
     public function waveArticle($id, $field, $diff)
     {
-        $fields = array('hits' , 'upsNum', 'postNum');
+        $fields = array('hits', 'upsNum', 'postNum');
 
         if (!in_array($field, $fields)) {
-            throw \InvalidArgumentException(sprintf("%s字段不允许增减，只有%s才被允许增减", $field, implode(',', $fields)));
+            throw \InvalidArgumentException(sprintf($this->getKernel()->trans('%field%字段不允许增减，只有%fields%才被允许增减', array('%field%' =>$field, '%fields%' => implode(',', $fields) ))));
         }
-        $sql = "UPDATE {$this->table} SET {$field} = {$field} + ? WHERE id = ? LIMIT 1";
+
+        $currentTime = time();
+        $sql         = "UPDATE {$this->table} SET {$field} = {$field} + ?, updatedTime = {$currentTime} WHERE id = ? LIMIT 1";
 
         return $this->getConnection()->executeQuery($sql, array($diff, $id));
     }
 
     public function updateArticle($id, $article)
     {
-        $article = $this->createSerializer()->serialize($article, $this->serializeFields);
+        $article                = $this->createSerializer()->serialize($article, $this->serializeFields);
+        $article['updatedTime'] = time();
         $this->getConnection()->update($this->table, $article, array('id' => $id));
 
         return $this->getArticle($id);
@@ -149,28 +157,8 @@ class ArticleDaoImpl extends BaseDao implements ArticleDao
 
     public function deleteArticle($id)
     {
-        $this->getConnection()->delete('thread_post',array('targetId' => $id , 'targetType'=>'article'));
+        $this->getConnection()->delete('thread_post', array('targetId' => $id, 'targetType' => 'article'));
         return $this->getConnection()->delete($this->table, array('id' => $id));
-    }
-
-    public function findPublishedArticlesByTagIdsAndCount($tagIds, $count)
-    {
-        $sql = "SELECT * FROM {$this->table} WHERE status = 'published'";
-        $length = count($tagIds);
-        $tagArray = array();
-        $sql .= " AND (";
-        for ($i = 0; $i < $length; $i++) {
-            $sql .= "  tagIds LIKE  ? ";
-            if ($i != $length-1) {
-                $sql .= " OR ";
-            }
-            $tagArray[] = '%|'.$tagIds[$i].'|%';
-        }
-        $sql .= " ) ";
-
-        $sql .= " ORDER BY publishedTime DESC LIMIT 0, {$count}";
-
-        return $this->getConnection()->fetchAll($sql, $tagArray);
     }
 
     protected function _createSearchQueryBuilder($conditions)
@@ -178,7 +166,7 @@ class ArticleDaoImpl extends BaseDao implements ArticleDao
         $conditions = array_filter($conditions);
 
         if (array_key_exists('property', $conditions)) {
-            $key = $conditions['property'];
+            $key              = $conditions['property'];
             $conditions[$key] = 1;
         }
 
@@ -189,26 +177,39 @@ class ArticleDaoImpl extends BaseDao implements ArticleDao
             }
         }
 
+        if (array_key_exists('hasThumb', $conditions)) {
+            $conditions['thumbNotEqual'] = '';
+            unset($conditions['hasThumb']);
+        }
+
         if (isset($conditions['keywords'])) {
             $conditions['keywords'] = "%{$conditions['keywords']}%";
         }
 
-        if (isset($conditions['tagId'])) {
-            $conditions['tagId'] = "%|{$conditions['tagId']}|%";
+        if(isset($conditions['likeOrgCode'])){
+            $conditions['likeOrgCode'] = $conditions['likeOrgCode'] . '%';
+            unset($conditions['orgCode']);
         }
 
         $builder = $this->createDynamicQueryBuilder($conditions)
             ->from($this->table, 'article')
             ->andWhere('status = :status')
+            ->andWhere('id IN ( :articleIds )')
             ->andWhere('categoryId = :categoryId')
             ->andWhere('featured = :featured')
             ->andWhere('promoted = :promoted')
             ->andWhere('sticky = :sticky')
             ->andWhere('title LIKE :keywords')
             ->andWhere('picture != :pictureNull')
-            ->andWhere('tagIds LIKE :tagId')
+            ->andWhere('updatedTime >= :updatedTime_GE')
             ->andWhere('categoryId = :categoryId')
-            ->andWhere('categoryId IN (:categoryIds)');
+            ->andWhere('categoryId IN (:categoryIds)')
+            ->andWhere('orgCode LIKE :likeOrgCode')
+            ->andWhere('id != :idNotEqual')
+            ->andWhere('id IN (:articleIds)')
+            ->andWhere('id = :articleId')
+            ->andWhere('thumb != :thumbNotEqual')
+            ->andWhere('orgCode = :orgCode');
 
         return $builder;
     }

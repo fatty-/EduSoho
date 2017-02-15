@@ -3,6 +3,7 @@
 {% block heading %}
   <div class="well well-sm">
   {{ question.stem|bbCode2Html|raw }}
+{% include 'TopxiaWebBundle:Attachment/Widget:list.html.twig' with {targetType:'question.stem', targetId:question.id  } %}
   </div>
 {% endblock %}
 

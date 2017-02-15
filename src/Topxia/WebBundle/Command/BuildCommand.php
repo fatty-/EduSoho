@@ -1,415 +1,361 @@
 <?php
 namespace Topxia\WebBundle\Command;
 
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\NullOutput;
 use Symfony\Component\Console\Output\OutputInterface;
-
+use Symfony\Component\Console\Question\ConfirmationQuestion;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Finder\Finder;
-use Topxia\System;
 use Topxia\Common\BlockToolkit;
-
+use Topxia\System;
 
 class BuildCommand extends BaseCommand
 {
+    /**
+     * @var InputInterface
+     */
+    private $input;
 
-	protected function configure()
-	{
-		$this->setName ( 'topxia:build' );
-	}
+    /**
+     * @var OutputInterface
+     */
+    private $output;
 
-	protected function execute(InputInterface $input, OutputInterface $output)
-	{
-		$output->writeln('<info>Start build.</info>');
-		$this->initBuild($input, $output);
-		$this->buildRootDirectory();
-		$this->buildApiDirectory();
-		$this->buildAppDirectory();
-		$this->buildDocDirectory();
-		$this->buildSrcDirectory();
-		$this->buildVendorDirectory();
-		$this->buildVendorUserDirectory();
-		$this->buildWebDirectory();
-		$this->buildPluginsDirectory();
-		$this->buildFixPdoSession();
-		$this->buildDefaultBlocks();
-		$this->cleanMacosDirectory();
+    private $rootDirectory;
 
-		$this->package();
+    private $buildDirectory;
 
-		$this->clean();
+    /**
+     * @var Filesystem
+     */
+    private $filesystem;
+    private $distDirectory;
 
-		$output->writeln('<info>End build.</info>');
+    protected function configure()
+    {
+        $this->setName('build:install-package')
+            ->setDescription('自动编制安装包（含演示数据）')
+            ->addArgument('domain', InputArgument::REQUIRED, '演示站点域名')
+            ->addArgument('user', InputArgument::REQUIRED, '演示站点数据库用户')
+            ->addArgument('password', InputArgument::REQUIRED, '数据库密码')
+            ->addArgument('database', InputArgument::REQUIRED, '演示站数据库')
+        ;
+    }
 
-		// $filesystem->mirror("{$rootDirectory}/{$directory}", "{$targetDirectory}/{$directory}");
-	}
+    protected function execute(InputInterface $input, OutputInterface $output)
+    {
+        $this->initServiceKernel();
+        $output->writeln('<info>Start build.</info>');
+        $this->initBuild($input, $output);
 
-	private function initBuild(InputInterface $input, OutputInterface $output)
-	{
-		$this->input = $input;
-		$this->output = $output;
+        $this->buildDatabase();
 
-		$this->rootDirectory = realpath($this->getContainer()->getParameter('kernel.root_dir') . '/../');
-		$this->buildDirectory = $this->rootDirectory . '/build';
+        $this->buildRootDirectory();
+        $this->buildApiDirectory();
+        $this->buildAppDirectory();
+        $this->buildBootstrapDirectory();
+        $this->buildSrcDirectory();
+        $this->buildVendorDirectory();
+        $this->buildVendorUserDirectory();
+        $this->buildWebDirectory();
+        $this->buildPluginsDirectory();
+        $this->buildDefaultBlocks();
 
-		$this->filesystem = new Filesystem();
+        $this->cleanMacosDirectory();
+        $this->clean();
 
-		if ($this->filesystem->exists($this->buildDirectory)) {
-			$this->filesystem->remove($this->buildDirectory);
-		}
-		$this->distDirectory = $this->buildDirectory . '/edusoho';
-		$this->filesystem->mkdir($this->distDirectory);
-	}
+        $this->copyInstallFiles();
+        $this->package();
+        $output->writeln('<info>End build.</info>');
+    }
 
-	private function package()
-	{
-		$this->output->writeln('packaging...');
+    private function initBuild(InputInterface $input, OutputInterface $output)
+    {
+        $this->input  = $input;
+        $this->output = $output;
 
-		chdir($this->buildDirectory);
+        $this->rootDirectory  = realpath($this->getContainer()->getParameter('kernel.root_dir') . '/../');
+        $this->buildDirectory = $this->rootDirectory . '/build';
 
-		$command = "tar czvf edusoho-" . System::VERSION . ".tar.gz edusoho/";
-		exec($command);
-	}
+        $this->filesystem = new Filesystem();
 
-	private function clean()
-	{
-		$this->output->writeln('cleaning...');
+        if ($this->filesystem->exists($this->buildDirectory)) {
+            $this->filesystem->remove($this->buildDirectory);
+        }
 
-	}
+        $this->distDirectory = $this->buildDirectory . DIRECTORY_SEPARATOR . 'edusoho';
+        $this->filesystem->mkdir($this->distDirectory);
+    }
 
-	private function buildRootDirectory()
-	{
-		$this->output->writeln('build / .');
-		$this->filesystem->copy("{$this->rootDirectory}/README.html", "{$this->distDirectory}/README.html");
-	}
+    private function copyInstallFiles()
+    {
+        $this->output->writeln('copy install files .');
 
-	private function buildApiDirectory()
-	{
-		$this->output->writeln('build api/ .');
-		$this->filesystem->mkdir("{$this->distDirectory}/api");
-		$this->filesystem->mirror("{$this->rootDirectory}/api", "{$this->distDirectory}/api");
-	}	
+        $command = $this->getApplication()->find('topxia:copy-install-files');
 
-	private function buildAppDirectory()
-	{
-		$this->output->writeln('build app/ .');
+        $input = new ArrayInput(array(
+            'command' => 'topxia:copy-install-files',
+            'version' => System::VERSION
+        ));
 
-		$this->filesystem->mkdir("{$this->distDirectory}/app");
-		$this->filesystem->mkdir("{$this->distDirectory}/app/cache");
-		$this->filesystem->mkdir("{$this->distDirectory}/app/data");
-		$this->filesystem->mkdir("{$this->distDirectory}/app/data/udisk");
-		$this->filesystem->mkdir("{$this->distDirectory}/app/data/private_files");
-		$this->filesystem->mkdir("{$this->distDirectory}/app/data/upgrade");
-		$this->filesystem->mkdir("{$this->distDirectory}/app/data/backup");
-		$this->filesystem->mkdir("{$this->distDirectory}/app/logs");
-		$this->filesystem->mirror("{$this->rootDirectory}/app/Resources", "{$this->distDirectory}/app/Resources");
-		$this->filesystem->mirror("{$this->rootDirectory}/app/config", "{$this->distDirectory}/app/config");
+        $command->run($input, $this->output);
+    }
 
-		$this->filesystem->chmod("{$this->distDirectory}/app/cache", 0777);
-		$this->filesystem->chmod("{$this->distDirectory}/app/data", 0777);
-		$this->filesystem->chmod("{$this->distDirectory}/app/data/udisk", 0777);
-		$this->filesystem->chmod("{$this->distDirectory}/app/data/private_files", 0777);
-		$this->filesystem->chmod("{$this->distDirectory}/app/data/upgrade", 0777);
-		$this->filesystem->chmod("{$this->distDirectory}/app/data/backup", 0777);
-		$this->filesystem->chmod("{$this->distDirectory}/app/logs", 0777);
+    private function buildDatabase()
+    {
+        $this->output->writeln('build database data.');
 
-		// $this->filesystem->remove("{$this->distDirectory}/app/config/config_dev.yml");
-		// $this->filesystem->remove("{$this->distDirectory}/app/config/config_test.yml");
-		// $this->filesystem->remove("{$this->distDirectory}/app/config/routing_dev.yml");
-		$this->filesystem->remove("{$this->distDirectory}/app/config/routing_plugins.yml");
-		$this->filesystem->touch("{$this->distDirectory}/app/config/routing_plugins.yml");
-		$this->filesystem->remove("{$this->distDirectory}/app/config/parameters.yml");
-		$this->filesystem->remove("{$this->distDirectory}/app/config/uc_client_config.php");
-		$this->filesystem->remove("{$this->distDirectory}/app/config/windid_client_config.php");
-		
-		$this->filesystem->copy("{$this->distDirectory}/app/config/parameters.yml.dist", "{$this->distDirectory}/app/config/parameters.yml");
-		$this->filesystem->chmod("{$this->distDirectory}/app/config/parameters.yml", 0777);
+        $dumpCommand = $this->getApplication()->find('topxia:dump-init-data');
 
-		$this->filesystem->copy("{$this->distDirectory}/app/config/uc_client_config.php.dist", "{$this->distDirectory}/app/config/uc_client_config.php");
-		$this->filesystem->chmod("{$this->distDirectory}/app/config/uc_client_config.php", 0777);
+        $input = new ArrayInput(array(
+            'command' => 'topxia:dump-init-data',
+            'domain'  => $this->input->getArgument('domain'),
+            'user'    => $this->input->getArgument('user'),
+            'password'=> $this->input->getArgument('password'),
+            'database'=> $this->input->getArgument('database')
+        ));
 
-		$this->filesystem->copy("{$this->distDirectory}/app/config/windid_client_config.php.dist", "{$this->distDirectory}/app/config/windid_client_config.php");
-		$this->filesystem->chmod("{$this->distDirectory}/app/config/windid_client_config.php", 0777);
+        $returnCode = $dumpCommand->run($input, $this->output);
 
+        $this->output->writeln('cut database file');
+        $cutCommand = $this->getApplication()->find('topxia:cutfile');
 
-		$this->filesystem->remove("{$this->distDirectory}/app/config/parameters.yml.dist");
-		$this->filesystem->remove("{$this->distDirectory}/app/config/uc_client_config.php.dist");
-		$this->filesystem->remove("{$this->distDirectory}/app/config/windid_client_config.php.dist");
+        $input = new ArrayInput(array(
+            'command' => 'topxia:cutfile',
+            'line'    => 15
+        ));
 
-		$this->filesystem->copy("{$this->rootDirectory}/app/console", "{$this->distDirectory}/app/console");
-		$this->filesystem->copy("{$this->rootDirectory}/app/AppCache.php", "{$this->distDirectory}/app/AppCache.php");
-		$this->filesystem->copy("{$this->rootDirectory}/app/AppKernel.php", "{$this->distDirectory}/app/AppKernel.php");
-		$this->filesystem->copy("{$this->rootDirectory}/app/autoload.php", "{$this->distDirectory}/app/autoload.php");
-		$this->filesystem->copy("{$this->rootDirectory}/app/bootstrap.php.cache", "{$this->distDirectory}/app/bootstrap.php.cache");
+        $returnCode = $cutCommand->run($input, $this->output);
 
-	}
+        $helper = $this->getHelper('question');
+        $question = new ConfirmationQuestion(
+            '请确认已经将演示数据sql中的cloud_access_key和cloud_secret_key修改为12345（值前面表示字符串长度的数字s:5也要改) Y/N:',
+            false
+        );
 
-	public function buildDocDirectory()
-	{
-		$this->output->writeln('build doc/ .');
+        if(!$helper->ask($this->input, $this->output, $question)){
+            $this->output->writeln('<error>制作安装包终止!</error>');
+            exit();
+        }
+    }
 
-		$this->filesystem->mkdir("{$this->distDirectory}/doc");
-		// $this->filesystem->copy("{$this->rootDirectory}/doc/development/INSTALL.md", "{$this->distDirectory}/doc/INSTALL.md", true);
-		// $this->filesystem->copy("{$this->rootDirectory}/doc/apache_server_config.txt", "{$this->distDirectory}/doc/apache_server_config.txt", true);
-		// $this->filesystem->copy("{$this->rootDirectory}/doc/nginx_server_config.txt", "{$this->distDirectory}/doc/nginx_server_config.txt", true);
-	}
+    private function package()
+    {
+        $this->output->writeln('packaging...');
 
-	public function buildPluginsDirectory()
-	{
-		$this->output->writeln('build plugins/ .');
-		$this->filesystem->mkdir("{$this->distDirectory}/plugins");
-	}
+        chdir($this->buildDirectory);
 
-	public function buildSrcDirectory()
-	{
-		$this->output->writeln('build src/ .');
-		$this->filesystem->mirror("{$this->rootDirectory}/src", "{$this->distDirectory}/src");
+        $command = "tar czvf edusoho-" . System::VERSION . ".tar.gz edusoho/";
+        exec($command);
+    }
 
-		$this->filesystem->remove("{$this->distDirectory}/src/Topxia/AdminBundle/Resources/public");
-		$this->filesystem->remove("{$this->distDirectory}/src/Topxia/WebBundle/Resources/public");
-		$this->filesystem->remove("{$this->distDirectory}/src/Topxia/MobileBundle/Resources/public");
-		$this->filesystem->remove("{$this->distDirectory}/src/Custom/AdminBundle/Resources/public");
-		$this->filesystem->remove("{$this->distDirectory}/src/Custom/WebBundle/Resources/public");
+    private function clean()
+    {
+        $this->output->writeln('cleaning...');
+    }
 
-		$this->filesystem->remove("{$this->distDirectory}/src/Topxia/WebBundle/Command");
-		$this->filesystem->mkdir("{$this->distDirectory}/src/Topxia/WebBundle/Command");
+    private function buildRootDirectory()
+    {
+        $this->output->writeln('build / .');
+        $this->filesystem->copy("{$this->rootDirectory}/README.html", "{$this->distDirectory}/README.html");
+    }
 
-		$this->filesystem->mirror("{$this->rootDirectory}/src/Topxia/WebBundle/Command/plugins-tpl", "{$this->distDirectory}/src/Topxia/WebBundle/Command/plugins-tpl");
-		$this->filesystem->mirror("{$this->rootDirectory}/src/Topxia/WebBundle/Command/Templates", "{$this->distDirectory}/src/Topxia/WebBundle/Command/Templates");
+    private function buildApiDirectory()
+    {
+        $this->output->writeln('build api/ .');
+        $this->filesystem->mkdir("{$this->distDirectory}/api");
+        $this->filesystem->mirror("{$this->rootDirectory}/api", "{$this->distDirectory}/api");
+    }
 
-		$this->filesystem->copy("{$this->rootDirectory}/src/Topxia/WebBundle/Command/BaseCommand.php", "{$this->distDirectory}/src/Topxia/WebBundle/Command/BaseCommand.php");
-		$this->filesystem->copy("{$this->rootDirectory}/src/Topxia/WebBundle/Command/BuildPluginAppCommand.php", "{$this->distDirectory}/src/Topxia/WebBundle/Command/BuildPluginAppCommand.php");
-		$this->filesystem->copy("{$this->rootDirectory}/src/Topxia/WebBundle/Command/BuildThemeAppCommand.php", "{$this->distDirectory}/src/Topxia/WebBundle/Command/BuildThemeAppCommand.php");
-		$this->filesystem->copy("{$this->rootDirectory}/src/Topxia/WebBundle/Command/PluginRegisterCommand.php", "{$this->distDirectory}/src/Topxia/WebBundle/Command/PluginRegisterCommand.php");
-		$this->filesystem->copy("{$this->rootDirectory}/src/Topxia/WebBundle/Command/PluginCreateCommand.php", "{$this->distDirectory}/src/Topxia/WebBundle/Command/PluginCreateCommand.php");
-		$this->filesystem->copy("{$this->rootDirectory}/src/Topxia/WebBundle/Command/PluginRefreshCommand.php", "{$this->distDirectory}/src/Topxia/WebBundle/Command/PluginRefreshCommand.php");
-		$this->filesystem->copy("{$this->rootDirectory}/src/Topxia/WebBundle/Command/ThemeRegisterCommand.php", "{$this->distDirectory}/src/Topxia/WebBundle/Command/ThemeRegisterCommand.php");
-		$this->filesystem->copy("{$this->rootDirectory}/src/Topxia/WebBundle/Command/ResetPasswordCommand.php", "{$this->distDirectory}/src/Topxia/WebBundle/Command/ResetPasswordCommand.php");
+    private function buildAppDirectory()
+    {
+        $this->output->writeln('build app/ .');
 
+        $this->filesystem->mkdir("{$this->distDirectory}/app");
+        $this->filesystem->mkdir("{$this->distDirectory}/app/cache");
+        $this->filesystem->mkdir("{$this->distDirectory}/app/data");
+        $this->filesystem->mkdir("{$this->distDirectory}/app/data/udisk");
+        $this->filesystem->mkdir("{$this->distDirectory}/app/data/private_files");
+        $this->filesystem->mkdir("{$this->distDirectory}/app/data/upgrade");
+        $this->filesystem->mkdir("{$this->distDirectory}/app/data/backup");
+        $this->filesystem->mkdir("{$this->distDirectory}/app/logs");
+        $this->filesystem->mirror("{$this->rootDirectory}/app/Resources", "{$this->distDirectory}/app/Resources");
+        $this->filesystem->mirror("{$this->rootDirectory}/app/config", "{$this->distDirectory}/app/config");
 
-		$finder = new Finder();
-		$finder->directories()->in("{$this->distDirectory}/src/");
+        $this->filesystem->chmod("{$this->distDirectory}/app/cache", 0777);
+        $this->filesystem->chmod("{$this->distDirectory}/app/data", 0777);
+        $this->filesystem->chmod("{$this->distDirectory}/app/data/udisk", 0777);
+        $this->filesystem->chmod("{$this->distDirectory}/app/data/private_files", 0777);
+        $this->filesystem->chmod("{$this->distDirectory}/app/data/upgrade", 0777);
+        $this->filesystem->chmod("{$this->distDirectory}/app/data/backup", 0777);
+        $this->filesystem->chmod("{$this->distDirectory}/app/logs", 0777);
 
-		$toDeletes = array();
-		foreach ($finder as $dir) {
-			if ($dir->getFilename() == 'Tests') {
-				$toDeletes[] = $dir->getRealpath();
-			}
-		}
+        $this->filesystem->remove("{$this->distDirectory}/app/config/routing_plugins.yml");
+        $this->filesystem->touch("{$this->distDirectory}/app/config/routing_plugins.yml");
+        $this->filesystem->remove("{$this->distDirectory}/app/config/parameters.yml");
 
-		foreach ($toDeletes as $file) {
-			$this->filesystem->remove($file);
-		}
+        $this->filesystem->copy("{$this->distDirectory}/app/config/parameters.yml.dist", "{$this->distDirectory}/app/config/parameters.yml");
+        $this->filesystem->chmod("{$this->distDirectory}/app/config/parameters.yml", 0777);
 
-	}
+        $this->filesystem->remove("{$this->distDirectory}/app/config/parameters.yml.dist");
 
-	public function buildVendorDirectory()
-	{
-		$this->output->writeln('build vendor2/ .');
-		$this->filesystem->mkdir("{$this->distDirectory}/vendor2");
-		$this->filesystem->copy("{$this->rootDirectory}/vendor2/autoload.php", "{$this->distDirectory}/vendor2/autoload.php");
+        $this->filesystem->copy("{$this->rootDirectory}/app/console", "{$this->distDirectory}/app/console");
+        $this->filesystem->copy("{$this->rootDirectory}/app/AppCache.php", "{$this->distDirectory}/app/AppCache.php");
+        $this->filesystem->copy("{$this->rootDirectory}/app/AppKernel.php", "{$this->distDirectory}/app/AppKernel.php");
+        $this->filesystem->copy("{$this->rootDirectory}/app/autoload.php", "{$this->distDirectory}/app/autoload.php");
+        $this->filesystem->copy("{$this->rootDirectory}/app/bootstrap.php.cache", "{$this->distDirectory}/app/bootstrap.php.cache");
+    }
 
-		$directories = array(
-			'composer',
-			'doctrine/annotations/lib',
-			'doctrine/cache/lib',
-			'doctrine/collections/lib',
-			'doctrine/common/lib/Doctrine',
-			'doctrine/dbal/lib/Doctrine',
-			'doctrine/doctrine-bundle',
-			'doctrine/doctrine-cache-bundle',
-			'doctrine/doctrine-migrations-bundle',
-			'doctrine/doctrine-cache-bundle',
-			'doctrine/inflector/lib',
-			'doctrine/lexer/lib',
-			'doctrine/migrations/lib',
-			'doctrine/orm/lib',
-			'ezyang/htmlpurifier/library',
-			'gregwar/captcha',
-			'imagine/imagine/lib',
-			'jdorn/sql-formatter/lib',
-			'kriswallsmith/assetic/src',
-			'monolog/monolog/src',
-			'phpoffice/phpexcel/Classes',
-			'psr/log/Psr',
-			'sensio/distribution-bundle',
-			'sensio/framework-extra-bundle',
-			'sensio/generator-bundle',
-			'swiftmailer/swiftmailer/lib',
-			'symfony/assetic-bundle',
-			//'symfony/icu',
-			'symfony/monolog-bundle',
-			'symfony/swiftmailer-bundle',
-			'symfony/symfony/src',
-			'twig/twig/lib',
-			'twig/extensions/lib',
-			'endroid/qrcode/src',
-			'endroid/qrcode/assets',
-		);
+    public function buildBootstrapDirectory()
+    {
+        $this->filesystem->mkdir("{$this->distDirectory}/bootstrap");
+        $this->filesystem->copy("{$this->rootDirectory}/bootstrap/bootstrap_install.php", "{$this->distDirectory}/bootstrap/bootstrap_install.php");
+    }
 
-		foreach ($directories as $dir) {
-			$this->filesystem->mirror("{$this->rootDirectory}/vendor2/{$dir}", "{$this->distDirectory}/vendor2/{$dir}");
-		}
+    public function buildPluginsDirectory()
+    {
+        $this->output->writeln('build plugins/ .');
+        $this->filesystem->mkdir("{$this->distDirectory}/plugins");
+    }
 
-		$this->filesystem->remove("{$this->distDirectory}/vendor2/composer/installed.json");
+    public function buildSrcDirectory()
+    {
+        $this->output->writeln('build src/ .');
+        $this->filesystem->mirror("{$this->rootDirectory}/src", "{$this->distDirectory}/src");
 
-		$finder = new Finder();
-		$finder->directories()->in("{$this->distDirectory}/vendor2");
+        $this->filesystem->remove("{$this->distDirectory}/src/Topxia/AdminBundle/Resources/public");
+        $this->filesystem->remove("{$this->distDirectory}/src/Topxia/WebBundle/Resources/public");
+        $this->filesystem->remove("{$this->distDirectory}/src/Topxia/MobileBundle/Resources/public");
+        $this->filesystem->remove("{$this->distDirectory}/src/Custom/AdminBundle/Resources/public");
+        $this->filesystem->remove("{$this->distDirectory}/src/Custom/WebBundle/Resources/public");
+        $this->filesystem->remove("{$this->distDirectory}/src/Classroom/ClassroomBundle/Resources/public");
+        $this->filesystem->remove("{$this->distDirectory}/src/MaterialLib/MaterialLibBundle/Resources/public");
+        $this->filesystem->remove("{$this->distDirectory}/src/Org/OrgBundle/Resources/public");
+        $this->filesystem->remove("{$this->distDirectory}/src/Permission/PermissionBundle/Resources/public");
+        $this->filesystem->remove("{$this->distDirectory}/src/SensitiveWord/SensitiveWordBundle/Resources/public");
 
-		$toDeletes = array();
-		foreach ($finder as $dir) {
-			if ($dir->getFilename() == 'Tests') {
-				$toDeletes[] = $dir->getRealpath();
-			}
-		}
+        $this->filesystem->remove("{$this->distDirectory}/src/Topxia/WebBundle/Command");
+        $this->filesystem->mkdir("{$this->distDirectory}/src/Topxia/WebBundle/Command");
 
-		$this->filesystem->remove($toDeletes);
+        $this->filesystem->mirror("{$this->rootDirectory}/src/Topxia/WebBundle/Command/plugins-tpl", "{$this->distDirectory}/src/Topxia/WebBundle/Command/plugins-tpl");
+        $this->filesystem->mirror("{$this->rootDirectory}/src/Topxia/WebBundle/Command/Templates", "{$this->distDirectory}/src/Topxia/WebBundle/Command/Templates");
 
-		//$this->cleanIcuVendor();
+        $this->filesystem->copy("{$this->rootDirectory}/src/Topxia/WebBundle/Command/BaseCommand.php", "{$this->distDirectory}/src/Topxia/WebBundle/Command/BaseCommand.php");
+        $this->filesystem->copy("{$this->rootDirectory}/src/Topxia/WebBundle/Command/BuildPluginAppCommand.php", "{$this->distDirectory}/src/Topxia/WebBundle/Command/BuildPluginAppCommand.php");
+        $this->filesystem->copy("{$this->rootDirectory}/src/Topxia/WebBundle/Command/BuildThemeAppCommand.php", "{$this->distDirectory}/src/Topxia/WebBundle/Command/BuildThemeAppCommand.php");
+        $this->filesystem->copy("{$this->rootDirectory}/src/Topxia/WebBundle/Command/OldPluginRegisterCommand.php", "{$this->distDirectory}/src/Topxia/WebBundle/Command/OldPluginRegisterCommand.php");
+        $this->filesystem->copy("{$this->rootDirectory}/src/Topxia/WebBundle/Command/OldPluginCreateCommand.php", "{$this->distDirectory}/src/Topxia/WebBundle/Command/OldPluginCreateCommand.php");
+        $this->filesystem->copy("{$this->rootDirectory}/src/Topxia/WebBundle/Command/OldPluginRefreshCommand.php", "{$this->distDirectory}/src/Topxia/WebBundle/Command/OldPluginRefreshCommand.php");
+        $this->filesystem->copy("{$this->rootDirectory}/src/Topxia/WebBundle/Command/ThemeRegisterCommand.php", "{$this->distDirectory}/src/Topxia/WebBundle/Command/ThemeRegisterCommand.php");
+        $this->filesystem->copy("{$this->rootDirectory}/src/Topxia/WebBundle/Command/ResetPasswordCommand.php", "{$this->distDirectory}/src/Topxia/WebBundle/Command/ResetPasswordCommand.php");
+        $this->filesystem->copy("{$this->rootDirectory}/src/Topxia/WebBundle/Command/Fixtures/PluginAppUpgradeTemplate.php", "{$this->distDirectory}/src/Topxia/WebBundle/Command/Fixtures/PluginAppUpgradeTemplate.php");
+        $this->filesystem->copy("{$this->rootDirectory}/src/Topxia/WebBundle/Command/InitAutoOpenSaasCommand.php", "{$this->distDirectory}/src/Topxia/WebBundle/Command/InitAutoOpenSaasCommand.php");
 
-	}
+        $finder = new Finder();
+        $finder->directories()->in("{$this->distDirectory}/src/");
 
-	private function cleanIcuVendor()
-	{
-		$icuBase = "{$this->distDirectory}/vendor2/symfony/icu/Symfony/Component/Icu/Resources/data";
-		$whileFiles = array(
-			'svn-info.txt',
-			'version.txt',
-			'curr/en.res',
-			'curr/zh.res',
-			'curr/zh_CN.res',
-			'lang/en.res',
-			'lang/zh.res',
-			'lang/zh_CN.res',
-			'locales/en.res',
-			'locales/zh.res',
-			'locales/zh_CN.res',
-			'region/en.res',
-			'region/zh.res',
-			'region/zh_CN.res'
-		);
+        $toDeletes = array();
 
-		$finder = new Finder();
-		$finder->files()->in($icuBase);
-		foreach ($finder as $file) {
-			if (!in_array($file->getRelativePathname(), $whileFiles)) {
-				$this->filesystem->remove($file->getRealpath());
-			}
-		}
-	}
+        foreach ($finder as $dir) {
+            if ($dir->getFilename() == 'Tests') {
+                $toDeletes[] = $dir->getRealpath();
+            }
+        }
 
-	public function buildVendorUserDirectory()
-	{
-		$this->output->writeln('build vendor_user/ .');
-		$this->filesystem->mirror("{$this->rootDirectory}/vendor_user", "{$this->distDirectory}/vendor_user");
-	}
+        foreach ($toDeletes as $file) {
+            $this->filesystem->remove($file);
+        }
+    }
 
-	public function buildWebDirectory()
-	{
-		$this->output->writeln('build web/ .');
+    public function buildVendorDirectory()
+    {
+        $this->output->writeln('build vendor/ .');
+        $buildVendorCommand = $this->getApplication()->find('app:build-mini-vendor');
+        $input = new ArrayInput(array());
+        $returnCode = $buildVendorCommand->run($input, new NullOutput());
+        $this->filesystem->mirror("{$this->buildDirectory}/vendor", "{$this->distDirectory}/vendor");
+        $this->filesystem->remove("{$this->buildDirectory}/vendor");
+    }
 
-		$this->filesystem->mkdir("{$this->distDirectory}/web");
-		$this->filesystem->mkdir("{$this->distDirectory}/web/files");
-		$this->filesystem->mkdir("{$this->distDirectory}/web/bundles");
-		$this->filesystem->mkdir("{$this->distDirectory}/web/themes");
-		$this->filesystem->mirror("{$this->rootDirectory}/web/assets", "{$this->distDirectory}/web/assets");
-		$this->filesystem->mirror("{$this->rootDirectory}/web/customize", "{$this->distDirectory}/web/customize");
-		$this->filesystem->mirror("{$this->rootDirectory}/web/install", "{$this->distDirectory}/web/install");
-		$this->filesystem->mirror("{$this->rootDirectory}/web/themes/autumn", "{$this->distDirectory}/web/themes/autumn");
-		$this->filesystem->mirror("{$this->rootDirectory}/web/themes/default", "{$this->distDirectory}/web/themes/default");
-		$this->filesystem->mirror("{$this->rootDirectory}/web/themes/jianmo", "{$this->distDirectory}/web/themes/jianmo");
-		$this->filesystem->mirror("{$this->rootDirectory}/web/themes/default-b", "{$this->distDirectory}/web/themes/default-b");
-		$this->filesystem->copy("{$this->rootDirectory}/web/themes/block.json", "{$this->distDirectory}/web/themes/block.json");
+    public function buildVendorUserDirectory()
+    {
+        $this->output->writeln('build vendor_user/ .');
+        $this->filesystem->mirror("{$this->rootDirectory}/vendor_user", "{$this->distDirectory}/vendor_user");
+    }
 
-		$this->filesystem->copy("{$this->rootDirectory}/web/.htaccess", "{$this->distDirectory}/web/.htaccess");
-		$this->filesystem->copy("{$this->rootDirectory}/web/app.php", "{$this->distDirectory}/web/app.php");
-		$this->filesystem->copy("{$this->rootDirectory}/web/app_dev.php", "{$this->distDirectory}/web/app_dev.php");
-		$this->filesystem->copy("{$this->rootDirectory}/web/favicon.ico", "{$this->distDirectory}/web/favicon.ico");
-		$this->filesystem->copy("{$this->rootDirectory}/web/robots.txt", "{$this->distDirectory}/web/robots.txt");
-		$this->filesystem->copy("{$this->rootDirectory}/web/crossdomain.xml", "{$this->distDirectory}/web/crossdomain.xml");
+    public function buildWebDirectory()
+    {
+        $this->output->writeln('build web/ .');
 
-		$this->filesystem->chmod("{$this->distDirectory}/web/files", 0777);
+        $this->filesystem->mkdir("{$this->distDirectory}/web");
+        $this->filesystem->mkdir("{$this->distDirectory}/web/files");
+        $this->filesystem->mkdir("{$this->distDirectory}/web/bundles");
+        $this->filesystem->mkdir("{$this->distDirectory}/web/themes");
+        $this->filesystem->mirror("{$this->rootDirectory}/web/assets", "{$this->distDirectory}/web/assets");
+        $this->filesystem->mirror("{$this->rootDirectory}/web/customize", "{$this->distDirectory}/web/customize");
+        $this->filesystem->mirror("{$this->rootDirectory}/web/install", "{$this->distDirectory}/web/install");
+        $this->filesystem->mirror("{$this->rootDirectory}/web/themes/autumn", "{$this->distDirectory}/web/themes/autumn");
+        $this->filesystem->mirror("{$this->rootDirectory}/web/themes/default", "{$this->distDirectory}/web/themes/default");
+        $this->filesystem->mirror("{$this->rootDirectory}/web/themes/jianmo", "{$this->distDirectory}/web/themes/jianmo");
+        $this->filesystem->mirror("{$this->rootDirectory}/web/themes/default-b", "{$this->distDirectory}/web/themes/default-b");
+        $this->filesystem->copy("{$this->rootDirectory}/web/themes/block.json", "{$this->distDirectory}/web/themes/block.json");
 
-		$finder = new Finder();
-		$finder->files()->in("{$this->distDirectory}/web/assets/libs");
-		foreach ($finder as $file) {
-			$filename = $file->getFilename();
-			if ($filename == 'package.json' || preg_match('/-debug.js$/', $filename) || preg_match('/-debug.css$/', $filename)) {
-				$this->filesystem->remove($file->getRealpath());
-			}
-		}
+        $this->filesystem->copy("{$this->rootDirectory}/web/.htaccess", "{$this->distDirectory}/web/.htaccess");
+        $this->filesystem->copy("{$this->rootDirectory}/web/app.php", "{$this->distDirectory}/web/app.php");
+        $this->filesystem->copy("{$this->rootDirectory}/web/app_dev.php", "{$this->distDirectory}/web/app_dev.php");
+        $this->filesystem->copy("{$this->rootDirectory}/web/favicon.ico", "{$this->distDirectory}/web/favicon.ico");
+        $this->filesystem->copy("{$this->rootDirectory}/web/robots.txt", "{$this->distDirectory}/web/robots.txt");
+        $this->filesystem->copy("{$this->rootDirectory}/web/crossdomain.xml", "{$this->distDirectory}/web/crossdomain.xml");
 
-		$finder = new Finder();
-		$finder->directories()->in("{$this->rootDirectory}/web/bundles")->depth('== 0');
-		$needs = array('sensiodistribution', 'topxiaadmin', 'framework', 'topxiaweb', 'customweb', 'customadmin', 'topxiamobilebundlev2', 'classroom');
-		foreach ($finder as $dir) {
-			if (!in_array($dir->getFilename(), $needs)) {
-				continue;
-			}
-			$this->filesystem->mirror($dir->getRealpath(), "{$this->distDirectory}/web/bundles/{$dir->getFilename()}");
-		}
+        $this->filesystem->chmod("{$this->distDirectory}/web/files", 0777);
 
-	}
+        $finder = new Finder();
+        $finder->files()->in("{$this->distDirectory}/web/assets/libs");
 
-	public function buildFixPdoSession()
-	{
-		$this->output->writeln('build fix PdoSessionHandler .');
+        foreach ($finder as $file) {
+            $filename = $file->getFilename();
 
-		$targetPath = "{$this->distDirectory}/vendor2/symfony/symfony/src/Symfony/Component/HttpFoundation/Session/Storage/Handler/PdoSessionHandler.php";
-		$sourcePath = __DIR__ . "/Fixtures/PdoSessionHandler.php";
-		$this->filesystem->copy($sourcePath, $targetPath, true);
-	}
+            if ($filename == 'package.json' || preg_match('/-debug.js$/', $filename) || preg_match('/-debug.css$/', $filename)) {
+                $this->filesystem->remove($file->getRealpath());
+            }
+        }
 
-	public function buildDefaultBlocks()
-	{
-		$this->output->writeln('build default blocks .');
+        $finder = new Finder();
+        $finder->directories()->in("{$this->rootDirectory}/web/bundles")->depth('== 0');
+        $needs = array('sensiodistribution', 'topxiaadmin', 'framework', 'topxiaweb', 'customweb', 'customadmin', 'topxiamobilebundlev2', 'classroom', 'sensitiveword', 'materiallib', 'org', 'permission', 'bazingajstranslation');
+
+        foreach ($finder as $dir) {
+            if (!in_array($dir->getFilename(), $needs)) {
+                continue;
+            }
+
+            $this->filesystem->mirror($dir->getRealpath(), "{$this->distDirectory}/web/bundles/{$dir->getFilename()}");
+        }
+    }
+
+    public function buildDefaultBlocks()
+    {
+        $this->output->writeln('build default blocks .');
 
         $themeDir = realpath(__DIR__ . '/../../../../web/themes/');
+        BlockToolkit::init("{$themeDir}/block.json", $this->getContainer());
+        BlockToolkit::init("{$themeDir}/default/block.json", $this->getContainer());
+        BlockToolkit::init("{$themeDir}/autumn/block.json", $this->getContainer());
+        BlockToolkit::init("{$themeDir}/jianmo/block.json", $this->getContainer());
+    }
 
-        $html =  $this->generateBlcokContent("{$themeDir}/block.json");
-        $this->generateBlcokContent("{$themeDir}/default/block.json");
-        $this->generateBlcokContent("{$themeDir}/autumn/block.json");
-        $this->generateBlcokContent("{$themeDir}/jianmo/block.json");
+    public function cleanMacosDirectory()
+    {
+        $finder = new Finder();
+        $finder->files()->in($this->distDirectory)->ignoreDotFiles(false);
 
-	}
-
-	private function generateBlcokContent($metaFilePath)
-	{
-		$metas = file_get_contents($metaFilePath);
-		$metas = json_decode($metas, true);
-		if (empty($metas)) {
-			throw new \RuntimeException("插件元信息文件{$metaFilePath}格式不符合JSON规范，解析失败，请检查元信息文件格式");
-		}
-
-		foreach ($metas as $code => $meta) {
-			$data = array();
-			foreach ($meta['items'] as $key => $item) {
-				$data[$key] = $item['default'];
-			}
-			$block = array('templateName' => $meta['templateName'], 'data' => $data);
-			$html = BlockToolkit::render($block, $this->getContainer());
-
-			$filename = "block-" . md5($code) . '.html';
-			$folder = "{$this->distDirectory}/web/install/blocks/";
-			if (!file_exists($folder)) {
-				mkdir($folder);
-			}
-			$filename = $folder . $filename;
-
-			file_put_contents($filename, $html);
-		}
-	}
-
-	public function cleanMacosDirectory()
-	{
-		$finder = new Finder();
-		$finder->files()->in($this->distDirectory)->ignoreDotFiles(false);
-		foreach ($finder as $dir) {
-
-			if ($dir->getBasename() == '.DS_Store') {
-				$this->filesystem->remove($dir->getRealpath());
-			}
-		}
-	}
-
+        foreach ($finder as $dir) {
+            if ($dir->getBasename() == '.DS_Store') {
+                $this->filesystem->remove($dir->getRealpath());
+            }
+        }
+    }
 }

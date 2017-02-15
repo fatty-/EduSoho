@@ -2,14 +2,14 @@ define(function(require, exports, module) {
 
     var Validator = require('bootstrap.validator');
     require('common/validator-rules').inject(Validator);
-    require('ckeditor');
+    require('es-ckeditor');
     var Widget = require('widget');
     var Notify = require('common/bootstrap-notify');
 
     var ThreadShowWidget = Widget.extend({
 
         attrs: {
-            
+
         },
 
         events: {
@@ -18,16 +18,16 @@ define(function(require, exports, module) {
             'click .js-post-delete': 'onPostDelete',
             'click .js-post-up': 'onPostUp',
             'click  [data-role=confirm-btn]': 'onConfirmBtn',
-            'click .js-toggle-subpost-form' : 'onClickToggleSubpostForm',
+            'click .js-toggle-subpost-form': 'onClickToggleSubpostForm',
             'click .js-event-cancel': 'onClickEventCancelBtn',
-            'click .thread-subpost-container .pagination a' : 'onClickSubpost'
+            'click .thread-subpost-container .pagination a': 'onClickSubpost'
         },
 
-        setup:function() {
+        setup: function() {
             if ($('[name=access-intercept-check]').length > 0) {
                 $.get($('[name=access-intercept-check]').val(), function(response) {
                     if (response) {
-                        return ;
+                        return;
                     }
 
                     $('.access-intercept-modal').modal('show');
@@ -50,7 +50,7 @@ define(function(require, exports, module) {
             e.stopPropagation();
             var that = this;
             var $btn = $(e.currentTarget);
-            if (!confirm('真的要删除该回复吗？')) {
+            if (!confirm(Translator.trans('真的要删除该回复吗？'))) {
                 return ;
             }
             var inSubpost = $btn.parents('.thread-subpost-list').length > 0;
@@ -58,9 +58,9 @@ define(function(require, exports, module) {
             $.post($btn.data('url'), function() {
                 if (inSubpost) {
                     var $subpostsNum = $btn.parents('.thread-post').find('.subposts-num');
-                    $subpostsNum.text(parseInt($subpostsNum.text())-1);
+                    $subpostsNum.text(parseInt($subpostsNum.text()) - 1);
                 } else {
-                    that.$('.thread-post-num').text(parseInt(that.$('.thread-post-num').text())-1);
+                    that.$('.thread-post-num').text(parseInt(that.$('.thread-post-num').text()) - 1);
                 }
                 $($btn.data('for')).remove();
             });
@@ -73,9 +73,9 @@ define(function(require, exports, module) {
                 if (response.status == 'ok') {
                     $btn.find(".post-up-num").text(parseInt($btn.find(".post-up-num").text()) + 1);
                 } else if (response.status == 'votedError') {
-                    Notify.danger('您已点过赞了！');
+                    Notify.danger(Translator.trans('您已点过赞了！'));
                 } else {
-                    alert('点赞失败，请重试！');
+                    alert(Translator.trans('点赞失败，请重试！'));
                 }
             }, 'json');
 
@@ -85,12 +85,12 @@ define(function(require, exports, module) {
             e.stopPropagation();
             var $btn = $(e.currentTarget);
             if (!confirm($btn.data('confirmMessage'))) {
-                return ;
+                return;
             }
             $.post($btn.data('url'), function() {
                 if ($btn.data('afterUrl')) {
                     window.location.href = $btn.data('afterUrl');
-                    return ;
+                    return;
                 }
                 window.location.reload();
             });
@@ -104,16 +104,19 @@ define(function(require, exports, module) {
             var $form = $container.find('.thread-subpost-form');
             if (inSubpost) {
                 $form.removeClass('hide');
-                var text = '回复 @' + $btn.parents('.thread-post').data('authorName') + '： ';
+                var text = Translator.trans('回复')+' @ '+ $btn.parents('.thread-post').data('authorName') + '： ';
                 $form.find('textarea').val(text).trigger('focus');
 
             } else {
-                if ($container.hasClass('hide')) {
-                    $container.removeClass('hide');
-                } else {
-                    $container.addClass('hide');
-                }
+                $container.toggleClass('hide');
             }
+            
+            if ($btn.html() == Translator.trans('回复')) {
+                $btn.html(Translator.trans('收起'));
+            } else {
+                $btn.html(Translator.trans('回复'));
+            }
+            
             this._initSubpostForm($form);
         },
 
@@ -125,7 +128,7 @@ define(function(require, exports, module) {
             this._initSubpostForm($form);
         },
         onClickEventCancelBtn: function(e) {
-            $.post($(e.currentTarget).data('url'), function(result){
+            $.post($(e.currentTarget).data('url'), function(result) {
                 window.location.reload();
             });
         },
@@ -133,22 +136,22 @@ define(function(require, exports, module) {
             e.preventDefault();
             var $pageBtn = $(e.currentTarget);
 
-            $.post($pageBtn.attr('href'), function(result){
+            $.post($pageBtn.attr('href'), function(result) {
 
                 var id = $pageBtn.parents(".thread-post").attr("id");
                 $("body,html").animate({
-                    scrollTop: $("#"+id).offset().top
+                    scrollTop: $("#" + id).offset().top
                 }, 300), !1
 
-               $pageBtn.closest('.thread-subpost-container .thread-subpost-content').html(result);
+                $pageBtn.closest('.thread-subpost-container .thread-subpost-content').html(result);
             });
-            
+
         },
 
         _initSubpostForm: function($form) {
             var validator = Validator.query($form);
             if (validator) {
-                return ;
+                return;
             }
 
             validator = new Validator({
@@ -161,15 +164,26 @@ define(function(require, exports, module) {
 
                     var $btn = this.$('[type=submit]').button('loading');
                     $.post($form.attr('action'), $form.serialize(), function(response) {
+                        
+                        if (response.error) {
+                            Notify.danger(response.error);
+                            return;
+                        }
                         $btn.button('reset');
                         $form.parents('.thread-subpost-container').find('.thread-subpost-list').append(response);
                         $form.find('textarea').val('');
                         var $subpostsNum = $form.parents('.thread-post').find('.subposts-num');
-                        $subpostsNum.text(parseInt($subpostsNum.text()) +1);
+                        $subpostsNum.text(parseInt($subpostsNum.text()) + 1);
                         $subpostsNum.parent().removeClass('hide');
-                    }).error(function(){
+
+                    }).error(function(data) {
                         $btn.button('reset');
-                        Notify.danger('发表回复失败，请重试');
+                        data = $.parseJSON(data.responseText);
+                        if (data.error) {
+                            Notify.danger(data.error.message);
+                        } else {
+                            Notify.danger(Translator.trans('发表回复失败，请重试'));
+                        }
                     });
                 }
 
@@ -187,17 +201,17 @@ define(function(require, exports, module) {
             var that = this;
 
             if ($form.length == 0) {
-                return ;
+                return;
             }
 
             var $textarea = $form.find('textarea[name=content]');
-            if($textarea.data('imageUploadUrl')) {
+            if ($textarea.data('imageUploadUrl')) {
                 var editor = CKEDITOR.replace($textarea.attr('id'), {
-                    toolbar: 'Simple',
+                    toolbar: 'Thread',
                     filebrowserImageUploadUrl: $textarea.data('imageUploadUrl')
                 });
             }
-           
+
             var validator = new Validator({
                 element: $form,
                 autoSubmit: false,
@@ -216,15 +230,26 @@ define(function(require, exports, module) {
                             $list.prepend(response);
                             $textarea.val('');
                         }
-                        
+
                         var pos = $list.find('li:last-child').offset();
                         $('body').scrollTop(pos.top);
                         that.$('.thread-post-num').text(parseInt(that.$('.thread-post-num').text()) + 1);
                         $list.find('li.empty').remove();
                         $list.closest('.top-reply').removeClass('hidden');
-                    }).error(function(){
+
+                        //清除附件
+                        $('.js-attachment-list').empty();
+                        $('.js-attachment-ids').val("");
+                        $('.js-upload-file').removeClass('hidden');
+
+                    }).error(function(data) {
                         $btn.button('reset');
-                        Notify.danger('发表回复失败，请重试');
+                        data = $.parseJSON(data.responseText);
+                        if (data.error) {
+                            Notify.danger(data.error.message);
+                        } else {
+                            Notify.danger(Translator.trans('发表回复失败，请重试'));
+                        }
                     });
 
                 }
@@ -240,11 +265,11 @@ define(function(require, exports, module) {
                     editor.updateElement();
                 });
             }
-       
+
 
         }
     });
 
     module.exports = ThreadShowWidget;
-    
+
 });

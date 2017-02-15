@@ -7,29 +7,30 @@ use Topxia\Service\Thread\Dao\ThreadDao;
 
 class ThreadDaoImpl extends BaseDao implements ThreadDao
 {
-
     protected $table = 'thread';
 
     private $serializeFields = array(
-        'ats' => 'json',
+        'ats' => 'json'
     );
 
     public function getThread($id)
     {
         $that = $this;
 
-        return $this->fetchCached('id', $id, function ($id) use ($that) {
-            $sql = "SELECT * FROM {$that->getTable()} WHERE id = ? LIMIT 1";
+        return $this->fetchCached('id:{$id}', $id, function ($id) use ($that) {
+            $sql    = "SELECT * FROM {$that->getTable()} WHERE id = ? LIMIT 1";
             $thread = $that->getConnection()->fetchAssoc($sql, array($id));
 
             return $thread ? $that->createSerializer()->unserialize($thread, $that->getSerializeFields()) : null;
-        });
+        }
+
+        );
     }
 
     public function findThreadsByTargetAndUserId($target, $userId, $start, $limit)
     {
         $this->filterStartLimit($start, $limit);
-        $sql = "SELECT * FROM {$this->table} WHERE targetType = ? AND targetId = ? AND userId = ? ORDER BY createdTime DESC LIMIT {$start}, {$limit}";
+        $sql     = "SELECT * FROM {$this->table} WHERE targetType = ? AND targetId = ? AND userId = ? ORDER BY createdTime DESC LIMIT {$start}, {$limit}";
         $threads = $this->getConnection()->fetchAll($sql, array($target['type'], $target['id'], $userId)) ?: array();
 
         return $this->createSerializer()->unserializes($threads, $this->serializeFields);
@@ -38,7 +39,7 @@ class ThreadDaoImpl extends BaseDao implements ThreadDao
     public function findThreadsByTargetAndPostNum($target, $postNum, $start, $limit)
     {
         $this->filterStartLimit($start, $limit);
-        $sql = "SELECT * FROM {$this->table} WHERE targetType = ? AND targetId = ? AND postNum = ? ORDER BY createdTime DESC LIMIT {$start}, {$limit}";
+        $sql     = "SELECT * FROM {$this->table} WHERE targetType = ? AND targetId = ? AND postNum = ? ORDER BY createdTime DESC LIMIT {$start}, {$limit}";
         $threads = $this->getConnection()->fetchAll($sql, array($target['type'], $target['id'], $postNum)) ?: array();
 
         return $this->createSerializer()->unserializes($threads, $this->serializeFields);
@@ -51,6 +52,7 @@ class ThreadDaoImpl extends BaseDao implements ThreadDao
             ->select('*')
             ->setFirstResult($start)
             ->setMaxResults($limit);
+
         foreach ($orderBys as $orderBy) {
             $builder->addOrderBy($orderBy[0], $orderBy[1]);
         }
@@ -80,6 +82,7 @@ class ThreadDaoImpl extends BaseDao implements ThreadDao
 
         $builder = $this->createDynamicQueryBuilder($conditions)
             ->from($this->table, $this->table)
+            ->andWhere("updateTime >= :updateTime_GE")
             ->andWhere("targetType = :targetType")
             ->andWhere('targetId = :targetId')
             ->andWhere('userId = :userId')
@@ -94,6 +97,7 @@ class ThreadDaoImpl extends BaseDao implements ThreadDao
             ->andWhere('title LIKE :title')
             ->andWhere('id NOT IN ( :excludeIds )')
             ->andWhere('targetId IN (:targetIds)')
+            ->andWhere('startTime > :startTimeGreaterThan')
             ->andWhere('content LIKE :content');
 
         return $builder;
@@ -101,9 +105,14 @@ class ThreadDaoImpl extends BaseDao implements ThreadDao
 
     public function addThread($fields)
     {
+        $fields['createdTime'] = time();
+        $fields['updateTime']  = $fields['createdTime'];
+
         $this->createSerializer()->serialize($fields, $this->serializeFields);
 
         $affected = $this->getConnection()->insert($this->table, $fields);
+        $this->clearCached();
+
         if ($affected <= 0) {
             throw $this->createDaoException('Insert course thread error.');
         }
@@ -113,10 +122,10 @@ class ThreadDaoImpl extends BaseDao implements ThreadDao
 
     public function updateThread($id, $fields)
     {
-        $this->clearCached();
+        $fields['updateTime'] = time();
         $this->createSerializer()->serialize($fields, $this->serializeFields);
         $this->getConnection()->update($this->table, $fields, array('id' => $id));
-
+        $this->clearCached();
         return $this->getThread($id);
     }
 
@@ -131,10 +140,13 @@ class ThreadDaoImpl extends BaseDao implements ThreadDao
     {
         $this->clearCached();
         $fields = array('postNum', 'hitNum', 'memberNum');
+
         if (!in_array($field, $fields)) {
-            throw \InvalidArgumentException(sprintf("%s字段不允许增减，只有%s才被允许增减", $field, implode(',', $fields)));
+            throw \InvalidArgumentException(sprintf($this->getKernel()->trans('%field%字段不允许增减，只有%fields%才被允许增减', array('%field%' => $field, '%fields%' => implode(',', $fields)))));
         }
-        $sql = "UPDATE {$this->table} SET {$field} = {$field} + ? WHERE id = ? LIMIT 1";
+
+        $currentTime = time();
+        $sql         = "UPDATE {$this->table} SET {$field} = {$field} + ?, updateTime = {$currentTime} WHERE id = ? LIMIT 1";
 
         return $this->getConnection()->executeQuery($sql, array($diff, $id));
     }

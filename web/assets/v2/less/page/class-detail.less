@@ -22,17 +22,16 @@
   // background-color: @gray-lighter;
   // padding: 20px 0 30px 0;
   // padding-bottom: 25px;
-  .breadcrumb {
-    margin: 12px auto;
-    padding: 8px 0;
-    background: none;
-  }
+  // .breadcrumb {
+  //   margin: 12px auto;
+  //   padding: 8px 0;
+  //   background: none;
+  // }
   .class-bg-layer {
     top: 8px;
   }
   .class-header-mian {
     position: relative;
-    z-index: 1;
   }
   .class-header-bg {
     background-color: #fff;
@@ -44,12 +43,12 @@
     img {
       .img-responsive;
       width: 100%;
-      border-top-left-radius: 2px;
+      .border-top-left-radius();
       @media (min-width: @screen-sm-min) {
-        border-bottom-left-radius: 2px;
+        .border-bottom-left-radius();
       }
       @media (max-width: @screen-xs-max) {
-        border-top-right-radius: 2px;
+        .border-top-right-radius();
       }
     }
   }
@@ -192,6 +191,9 @@
     top: 10px;
     right: 10px;
     padding: 0 3px;
+    + .setting {
+      right: 35px;
+    }
   }
   &.before {
     .class-img {
@@ -317,8 +319,8 @@
       float: left;
       width: 430px;
       background-color: @gray-lighter;
-      border-top-right-radius: 2px;
-      border-bottom-right-radius: 2px;
+      .border-top-right-radius();
+      .border-bottom-right-radius();
       @media (max-width: @screen-md-max) {
         width: 300px;
       }
@@ -333,17 +335,17 @@
       display: inline-block;
     }
     .class-data {
-      border-top-right-radius: 2px;
+      .border-top-right-radius();
       margin-bottom: 0;
       @media (max-width: @screen-md-max) {
-        padding: 20px 0;
+        padding: 19px 0;
       }
       @media (max-width: @screen-sm-max) {
         padding: 0;
       }
       @media (max-width: @screen-xs-max) {
-        border-bootom-left-radius: 2px;
-        border-bootom-right-radius: 2px;
+        border-bootom-left-radius: 4px;
+        border-bootom-right-radius: 4px;
       }
       >li {
         width: 33.33%;
@@ -352,7 +354,7 @@
           width: 100%;
           border: none;
           padding: 0;
-          margin: 5px 0;
+          margin: 4px 0;
         }
         @media (max-width: @screen-xs-max) {
           padding: 10px 0;
@@ -440,57 +442,8 @@
   }
 }
 
-// 学习计划
-.study-plan-info {
-  color: #fff;
-  text-align: center;
-  background-color: @brand-primary;
-  .plan-info-item {
-    font-size: 24px;
-    padding: 10px;
-    margin: 20px auto;
-    &:nth-child(1),
-    &:nth-child(2) {
-      border-right: 1px solid #52db9c;
-    }
-  }
-  .open-plan {
-    margin: 20px auto;
-    padding: 5px 10px;
-    @media (max-width: @screen-sm-max) {
-      padding: 5px 0;
-    }
-    .btn {
-      display: inline-block;
-      margin-top: 20px;
-    }
-  }
-}
 
 // 班级主体、课程主体－－－－－－－－－－－－－－－－－－－－
-.class-detail-main,
-.course-detail-main {
-  .nav.nav-tabs>li>a {
-    padding: 10px 20px;
-    @media (max-width: @screen-md-max) {
-      padding: 10px 20px;
-    }
-    @media (max-width: @screen-md-max) {
-      padding: 10px 10px;
-      font-size: 14px;
-    }
-    .badge {
-      margin-left: 5px;
-      background-color: @gray;
-      .es-transition;
-    }
-    &:hover .badge {
-      background-color: @brand-primary;
-      .es-transition;
-    }
-  }
-}
-
 .class-course-list {
   .course-item {
     margin-top: 30px;
@@ -539,7 +492,7 @@
       }
       .course-show {
         position: absolute;
-        top: 35px;
+        top: 40px;
         right: 30px;
         .es-transition;
         @media (max-width: @screen-md-max) {
@@ -852,8 +805,8 @@
     right: 0;
     color: #fff;
     background-color: @brand-primary;
-    border-top-right-radius: 2px;
-    border-bottom-right-radius: 2px;
+    .border-top-right-radius();
+    .border-bottom-right-radius();
     &.after {
       // padding: 8px 15px;
       line-height: 20px;

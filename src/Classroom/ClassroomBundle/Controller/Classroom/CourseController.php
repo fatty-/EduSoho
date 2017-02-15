@@ -1,10 +1,10 @@
 <?php
 namespace Classroom\ClassroomBundle\Controller\Classroom;
 
+use Topxia\Common\Paginator;
+use Topxia\Common\ArrayToolkit;
 use Symfony\Component\HttpFoundation\Request;
 use Topxia\WebBundle\Controller\BaseController;
-use Topxia\Common\ArrayToolkit;
-use Topxia\Common\Paginator;
 
 class CourseController extends BaseController
 {
@@ -15,9 +15,9 @@ class CourseController extends BaseController
 
         $excludeIds = ArrayToolkit::column($actviteCourses, 'parentId');
         $conditions = array(
-            'status' => 'published',
-            'parentId' => 0,
-            'excludeIds' => $excludeIds,
+            'status'     => 'published',
+            'parentId'   => 0,
+            'excludeIds' => $excludeIds
         );
 
         $paginator = new Paginator(
@@ -33,20 +33,13 @@ class CourseController extends BaseController
             $paginator->getPerPageCount()
         );
 
-        $courseIds = ArrayToolkit::column($courses, 'id');
-        $userIds = array();
-        foreach ($courses as &$course) {
-            $course['tags'] = $this->getTagService()->findTagsByIds($course['tags']);
-            $userIds = array_merge($userIds, $course['teacherIds']);
-        }
-
-        $users = $this->getUserService()->findUsersByIds($userIds);
+        $users = $this->getUsers($courses);
 
         return $this->render("ClassroomBundle:ClassroomManage/Course:course-pick-modal.html.twig", array(
-            'users' => $users,
-            'courses' => $courses,
+            'users'       => $users,
+            'courses'     => $courses,
             'classroomId' => $classroomId,
-            'paginator' => $paginator,
+            'paginator'   => $paginator
         ));
     }
 
@@ -58,57 +51,52 @@ class CourseController extends BaseController
         if (empty($classroom)) {
             throw $this->createNotFoundException();
         }
-        
-        $courses = $this->getClassroomService()->findActiveCoursesByClassroomId($classroomId);
-        $currentUser = $this->getUserService()->getCurrentUser();
-        $courseMembers = array();
-        $teachers = array();
 
-        foreach ($courses as $key => $course) {
+        $courses       = $this->getClassroomService()->findActiveCoursesByClassroomId($classroomId);
+        $currentUser   = $this->getUserService()->getCurrentUser();
+        $courseMembers = array();
+        $teachers      = array();
+
+        foreach ($courses as &$course) {
             $courseMembers[$course['id']] = $this->getCourseService()->getCourseMember($course['id'], $currentUser->id);
 
-            $course['teachers'] = empty($course['teacherIds']) ? array() : $this->getUserService()->findUsersByIds($course['teacherIds']);
+            $course['teachers']      = empty($course['teacherIds']) ? array() : $this->getUserService()->findUsersByIds($course['teacherIds']);
             $teachers[$course['id']] = $course['teachers'];
         }
-        $coursesNum = count($courses);
 
         $user = $this->getCurrentUser();
 
-        $member = $user ? $this->getClassroomService()->getClassroomMember($classroom['id'], $user['id']) : null;
-        if(!$this->getClassroomService()->canLookClassroom($classroom['id'])){ 
-            return $this->createMessageResponse('info', '非常抱歉，您无权限访问该班级，如有需要请联系客服','',3,$this->generateUrl('homepage'));
+        $member = $user['id'] ? $this->getClassroomService()->getClassroomMember($classroom['id'], $user['id']) : null;
+        if (!$this->getClassroomService()->canLookClassroom($classroom['id'])) {
+            $classroomName = $this->setting('classroom.name', $this->getServiceKernel()->trans('班级'));
+            return $this->createMessageResponse('info', $this->getServiceKernel()->trans('非常抱歉，您无权限访问该%classroomName%，如有需要请联系客服',array('%classroomName%'=>$classroomName)), '', 3, $this->generateUrl('homepage'));
         }
-        if ($request->query->get('previewAs')) {
-            if ($this->getClassroomService()->canManageClassroom($classroomId)) {
-                $previewAs = $request->query->get('previewAs');
-            }
+
+        $canManageClassroom = $this->getClassroomService()->canManageClassroom($classroomId);
+        if ($request->query->get('previewAs') && $canManageClassroom) {
+            $previewAs = $request->query->get('previewAs');
         }
 
         $member = $this->previewAsMember($previewAs, $member, $classroom);
-
-        $reviewsNum = $this->getClassroomReviewService()->searchReviewCount(array(
-            'classroomId' => $classroomId,
-        ));
 
         $layout = 'ClassroomBundle:Classroom:layout.html.twig';
         if ($member && !$member["locked"]) {
             $layout = 'ClassroomBundle:Classroom:join-layout.html.twig';
         }
-        if(!$classroom){
+        if (!$classroom) {
             $classroomDescription = array();
-        }
-        else{
-        $classroomDescription = $classroom['about'];
-        $classroomDescription = strip_tags($classroomDescription,'');
-        $classroomDescription = preg_replace("/ /","",$classroomDescription);
+        } else {
+            $classroomDescription = $classroom['about'];
+            $classroomDescription = strip_tags($classroomDescription, '');
+            $classroomDescription = preg_replace("/ /", "", $classroomDescription);
         }
         return $this->render("ClassroomBundle:Classroom/Course:list.html.twig", array(
-            'classroom' => $classroom,
-            'member' => $member,
-            'teachers' => $teachers,
-            'courses' => $courses,
-            'courseMembers' => $courseMembers,
-            'layout' => $layout,
+            'classroom'            => $classroom,
+            'member'               => $member,
+            'teachers'             => $teachers,
+            'courses'              => $courses,
+            'courseMembers'        => $courseMembers,
+            'layout'               => $layout,
             'classroomDescription' => $classroomDescription
         ));
     }
@@ -117,63 +105,45 @@ class CourseController extends BaseController
     {
         $this->getClassroomService()->tryManageClassroom($classroomId);
         $key = $request->request->get("key");
-
-        $conditions = array( "title" => $key );
-        $conditions['status'] = 'published';
+        
+        $conditions             = array("title" => $key);
+        $conditions['status']   = 'published';
         $conditions['parentId'] = 0;
-        $courses = $this->getCourseService()->searchCourses(
-            $conditions,
-            'latest',
-            0,
+        $paginator = new Paginator(
+            $this->get('request'),
+            $this->getCourseService()->searchCourseCount($conditions),
             5
         );
 
-        $courseIds = ArrayToolkit::column($courses, 'id');
+        $courses = $this->getCourseService()->searchCourses(
+            $conditions,
+            'latest',
+            $paginator->getOffsetCount(),
+            $paginator->getPerPageCount()
+        );
 
-        $userIds = array();
-        foreach ($courses as &$course) {
-            $course['tags'] = $this->getTagService()->findTagsByIds($course['tags']);
-            $userIds = array_merge($userIds, $course['teacherIds']);
-        }
-
-        $users = $this->getUserService()->findUsersByIds($userIds);
+        $users = $this->getUsers($courses);
 
         return $this->render('TopxiaWebBundle:Course:course-select-list.html.twig', array(
-            'users' => $users,
+            'users'   => $users,
             'courses' => $courses,
+            'paginator' => $paginator,
+            'classroomId' => $classroomId,
+            'type' => 'ajax_pagination'
         ));
     }
 
-    private function _findCoursesInClassrooms($courseIds)
+    protected function getUsers($courses)
     {
-        $conditions = array(
-            'parentIds' => $courseIds,
-        );
-        $childCourses = $this->getCourseService()->searchCourses(
-            $conditions,
-            'latest',
-            0,
-            $this->getCourseService()->searchCourseCount($conditions)
-        );
+        $userIds = array();
+        foreach ($courses as &$course) {
+            $tags = $this->getTagService()->findTagsByOwner(array('ownerType' => 'course', 'ownerId' => $course['id']));
 
-        $childCourseIds = ArrayToolkit::column($childCourses, 'id');
-        $classroomCourses = $this->getClassroomService()->findCoursesByCoursesIds($childCourseIds);
-        $classroomCourses = ArrayToolkit::index($classroomCourses, 'courseId');
-        $goupCourses = ArrayToolkit::group($childCourses, 'parentId');
-        $mapping = array();
-        $classroomIds =  array();
-        foreach ($goupCourses as $parentId => $courses) {
-            foreach ($courses as $key => $course) {
-                if (!empty($classroomCourses[$course['id']])) {
-                    $classroomId = $classroomCourses[$course['id']]['classroomId'];
-                    $mapping[$parentId][] = $classroomId;
-                    $classroomIds[] = $classroomId;
-                }
-            }
+            $course['tags'] = ArrayToolkit::column($tags, 'id');
+            $userIds        = array_merge($userIds, $course['teacherIds']);
         }
-        $classrooms = $this->getClassroomService()->findClassroomsByIds($classroomIds);
 
-        return array($mapping, $classrooms);
+        return $this->getUserService()->findUsersByIds($userIds);
     }
 
     private function previewAsMember($previewAs, $member, $classroom)
@@ -186,17 +156,17 @@ class CourseController extends BaseController
             }
 
             $member = array(
-                'id' => 0,
+                'id'          => 0,
                 'classroomId' => $classroom['id'],
-                'userId' => $user['id'],
-                'orderId' => 0,
-                'levelId' => 0,
-                'noteNum' => 0,
-                'threadNum' => 0,
-                'remark' => '',
-                'role' => array('auditor'),
-                'locked' => 0,
-                'createdTime' => 0,
+                'userId'      => $user['id'],
+                'orderId'     => 0,
+                'levelId'     => 0,
+                'noteNum'     => 0,
+                'threadNum'   => 0,
+                'remark'      => '',
+                'role'        => array('auditor'),
+                'locked'      => 0,
+                'createdTime' => 0
             );
 
             if ($previewAs == 'member') {
@@ -225,5 +195,10 @@ class CourseController extends BaseController
     private function getTagService()
     {
         return $this->getServiceKernel()->createService('Taxonomy.TagService');
+    }
+
+    protected function getSettingService()
+    {
+        return $this->getServiceKernel()->createService('System.SettingService');
     }
 }

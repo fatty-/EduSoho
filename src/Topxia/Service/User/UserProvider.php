@@ -1,46 +1,79 @@
 <?php
 namespace Topxia\Service\User;
 
+use Permission\Common\PermissionBuilder;
+use Topxia\Service\Common\ServiceKernel;
+use Topxia\WebBundle\Handler\AuthenticationHelper;
 use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Security\Core\User\UserProviderInterface;
+use Symfony\Component\Security\Core\Exception\AuthenticationException;
 use Symfony\Component\Security\Core\Exception\UnsupportedUserException;
 use Symfony\Component\Security\Core\Exception\UsernameNotFoundException;
-use Symfony\Component\Security\Core\Exception\LockedException;
-use Topxia\Service\Common\ServiceKernel;
-use Topxia\Service\User\CurrentUser;
-use Topxia\Common\SimpleValidator;
 
-class UserProvider implements UserProviderInterface {
+class UserProvider implements UserProviderInterface
+{
+    private $container;
 
-    public function __construct ($container)
+    public function __construct(ContainerInterface $container)
     {
         $this->container = $container;
     }
 
-    public function loadUserByUsername ($username) {
+    public function loadUserByUsername($username)
+    {
         $user = $this->getUserService()->getUserByLoginField($username);
-        
+
         if (empty($user)) {
             throw new UsernameNotFoundException(sprintf('User "%s" not found.', $username));
         }
-        $user['currentIp'] = $this->container->get('request')->getClientIp();
-        $currentUser = new CurrentUser();
-        $currentUser->fromArray($user);
-        ServiceKernel::instance()->setCurrentUser($currentUser);
+
+        $request = $this->container->get('request');
         
+        $forbidden = AuthenticationHelper::checkLoginForbidden($request);
+        if ($forbidden['status'] == 'error') {
+            throw new AuthenticationException($forbidden['message']);
+        }
+
+        $user['currentIp'] = $request->getClientIp();
+        $user['org']       = $this->loadOrg($request, $user);
+        $currentUser       = new CurrentUser();
+        $currentUser->fromArray($user);
+        $currentUser->setPermissions(PermissionBuilder::instance()->getPermissionsByRoles($currentUser->getRoles()));
+        $biz = $this->container->get('biz');
+        $biz['user'] = $currentUser;
+        ServiceKernel::instance()->setCurrentUser($currentUser);
         return $currentUser;
     }
 
-    public function refreshUser (UserInterface $user) {
-        if (! $user instanceof CurrentUser) {
+    protected function loadOrg($request, $user)
+    {
+        $org = $request->getSession()->get('currentUserOrg', array());
+        if(empty($org) || $org['orgCode'] != $user['orgCode']) {
+            $org = $this->getOrgService()->getOrgByOrgCode($user['orgCode']);
+            $request->getSession()->set('currentUserOrg', $org);
+        }
+
+        return $org;
+    }
+
+    public function refreshUser(UserInterface $user)
+    {
+        if (!$user instanceof CurrentUser) {
             throw new UnsupportedUserException(sprintf('Instances of "%s" are not supported.', get_class($user)));
         }
 
         return $this->loadUserByUsername($user->getUsername());
     }
 
-    public function supportsClass ($class) {
+    public function supportsClass($class)
+    {
         return $class === 'Topxia\Service\User\CurrentUser';
+    }
+
+    protected function getRoleService()
+    {
+        return ServiceKernel::instance()->createService('Permission:Role.RoleService');
     }
 
     protected function getUserService()
@@ -48,4 +81,8 @@ class UserProvider implements UserProviderInterface {
         return ServiceKernel::instance()->createService('User.UserService');
     }
 
+    protected function getOrgService()
+    {
+        return ServiceKernel::instance()->createService('Org:Org.OrgService');
+    }
 }

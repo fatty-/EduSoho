@@ -1,196 +1,150 @@
 <?php
 namespace Topxia\WebBundle\Controller;
 
-use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\Response;
-use Topxia\WebBundle\Form\RegisterType;
-use Gregwar\Captcha\CaptchaBuilder;
 use Topxia\Common\SmsToolkit;
 use Topxia\Common\SimpleValidator;
+use Gregwar\Captcha\CaptchaBuilder;
+use Topxia\Service\Common\Mail\MailFactory;
+use Topxia\Service\Common\ServiceException;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 class RegisterController extends BaseController
 {
-     public function indexAction(Request $request)
+    public function indexAction(Request $request)
     {
-        $user = $this->getCurrentUser();
+        $fields = $request->query->all();
+        $user   = $this->getCurrentUser();
+
         if ($user->isLogin()) {
-            return $this->createMessageResponse('info', '你已经登录了', null, 3000, $this->generateUrl('homepage'));
+            return $this->createMessageResponse('info', $this->getServiceKernel()->trans('你已经登录了'), null, 3000, $this->getTargetPath($request));
         }
 
-        $registerEnable  = $this->getAuthService()->isRegisterEnabled();
+        $registerEnable = $this->getAuthService()->isRegisterEnabled();
+
         if (!$registerEnable) {
-            return $this->createMessageResponse('info', '注册已关闭，请联系管理员', null, 3000, $this->generateUrl('homepage'));
+            return $this->createMessageResponse('info', $this->getServiceKernel()->trans('注册已关闭，请联系管理员'), null, 3000, $this->getTargetPath($request));
         }
-        
+
         if ($request->getMethod() == 'POST') {
+            try {
+                $registration = $request->request->all();
 
-            $registration = $request->request->all();
-            $registration['mobile'] = isset($registration['verifiedMobile']) ? $registration['verifiedMobile'] : '';
-
-            $registration['createdIp'] = $request->getClientIp();
-
-
-            $authSettings = $this->getSettingService()->get('auth', array());
-
-            //验证码校验
-            $this->captchaEnabledValidator($authSettings,$registration,$request);
-            //手机校验码
-            if($this->smsCodeValidator($authSettings,$registration,$request)){
-                $registration['verifiedMobile'] = '';
-                $request->request->add(array_merge($request->request->all(),array('mobile'=>$registration['mobile'])));
-                
-                list($result, $sessionField, $requestField) = SmsToolkit::smsCheck($request, $scenario = 'sms_registration');
-                if ($result){
-                    $registration['verifiedMobile'] = $sessionField['to'];
-                }else{
-                    return $this->createMessageResponse('info', '手机短信验证错误，请重新注册');
+                if (isset($registration['emailOrMobile']) && SimpleValidator::mobile($registration['emailOrMobile'])) {
+                    $registration['verifiedMobile'] = $registration['emailOrMobile'];
                 }
-            }
-            //ip次数限制
-            if($this->registerLimitValidator($registration, $authSettings,$request)){
-               return  $this->createMessageResponse('info', '由于您注册次数过多，请稍候尝试');
-            }
 
-            $user = $this->getAuthService()->register($registration);
+                $registration['mobile']    = isset($registration['verifiedMobile']) ? $registration['verifiedMobile'] : '';
+                $registration['createdIp'] = $request->getClientIp();
+                $authSettings              = $this->getSettingService()->get('auth', array());
 
-            if(!isset($registration['nickname'])){
-                return  $this->render("TopxiaWebBundle:Register:nickname-update.html.twig",array('user' => $user));        
-            }else{
-                $authSettings = $this->getSettingService()->get('auth', array());
+                //验证码校验
+                $this->captchaEnabledValidator($authSettings, $registration, $request);
 
-                if(($authSettings && array_key_exists('email_enabled',$authSettings) && ($authSettings['email_enabled'] == 'closed') ) ||   !$this->isEmptyVeryfyMobile($user)){
-                     $this->authenticateUser($user);
+                //手机校验码
+                if ($this->smsCodeValidator($authSettings, $registration)) {
+                    $registration['verifiedMobile'] = '';
+                    $request->request->add(array_merge($request->request->all(), array('mobile' => $registration['mobile'])));
+
+                    list($result, $sessionField, $requestField) = SmsToolkit::smsCheck($request, $scenario = 'sms_registration');
+
+                    if ($result) {
+                        $registration['verifiedMobile'] = $sessionField['to'];
+                    } else {
+                        return $this->createMessageResponse('info', $this->getServiceKernel()->trans('手机号码和短信验证码不匹配，请重新注册'));
+                    }
+                }
+
+                $registration['createdIp'] = $request->getClientIp();
+                $registration['registeredWay'] = 'web';
+
+                $user = $this->getAuthService()->register($registration);
+
+                if (($authSettings
+                    && isset($authSettings['email_enabled'])
+                    && $authSettings['email_enabled'] == 'closed')
+                    || !$this->isEmptyVeryfyMobile($user)
+                ) {
+                    $this->authenticateUser($user);
                 }
 
                 $goto = $this->generateUrl('register_submited', array(
-                    'id' => $user['id'], 
+                    'id'   => $user['id'],
                     'hash' => $this->makeHash($user),
-                    'goto' => $this->getTargetPath($request),
+                    'goto' => $this->getTargetPath($request)
                 ));
-             
+
                 if ($this->getAuthService()->hasPartnerAuth()) {
-                     $this->authenticateUser($user);
-                    return $this->redirect($this->generateUrl('partner_login', array('goto' => $goto)));
+                    $currentUser = $this->getCurrentUser();
+
+                    if (!$currentUser->isLogin()) {
+                        $this->authenticateUser($user);
+                    }
+
+                    $goto = $this->generateUrl('partner_login', array('goto' => $goto));
                 }
 
-                $mailerSetting=$this->getSettingService()->get('mailer');
-
-                if(!$mailerSetting['enabled'] && $this->isEmptyVeryfyMobile($user)){
-                    return $this->redirect($this->getTargetPath($request));
-                }
-                return $this->redirect($goto);
+                return $this->redirect($this->generateUrl('register_success', array('goto' => $goto)));
+            } catch (ServiceException $se) {
+                $this->setFlashMessage('danger', $se->getMessage());
+            } catch (\Exception $e) {
+                return $this->createMessageResponse('error', $e->getMessage());
             }
-
         }
 
+        $inviteCode = '';
+        $inviteUser = array();
+
+        if (!empty($fields['inviteCode'])) {
+            $inviteUser = $this->getUserService()->getUserByInviteCode($fields['inviteCode']);
+        }
+
+        if (!empty($inviteUser)) {
+            $inviteCode = $fields['inviteCode'];
+        }
 
         return $this->render("TopxiaWebBundle:Register:index.html.twig", array(
+            'inviteCode'        => $inviteCode,
             'isRegisterEnabled' => $registerEnable,
-            'registerSort'=>array(),
-            '_target_path' => $this->getTargetPath($request),
+            'registerSort'      => array(),
+            'inviteUser'        => $inviteUser,
+            '_target_path'      => $this->getTargetPath($request)
         ));
     }
 
-
-    public function nicknameUpdateAction(Request $request)
+    public function successAction(Request $request)
     {
-        if ($request->getMethod() == 'POST') {
+        $goto = $request->query->get('goto');
 
-            $registration = $request->request->all();
-            $this->getAuthService()->changeNickname($registration['id'], $registration['nickname']);
-            $user =$this->getUserService()->getUser($registration['id']);
-
-            $authSettings = $this->getSettingService()->get('auth', array());
-
-            if(($authSettings && array_key_exists('email_enabled',$authSettings) && ($authSettings['email_enabled'] == 'closed') ) ||   !$this->isEmptyVeryfyMobile($user)){
-                 $this->authenticateUser($user);
-                 $this->sendRegisterMessage($user);
-            }
-
-            $goto = $this->generateUrl('register_submited', array(
-                'id' => $user['id'], 
-                'hash' => $this->makeHash($user),
-                'goto' => $this->getTargetPath($request),
-            ));
-         
-            if ($this->getAuthService()->hasPartnerAuth()) {
-                 $this->authenticateUser($user);
-                 $this->sendRegisterMessage($user);
-                return $this->redirect($this->generateUrl('partner_login', array('goto' => $goto)));
-            }
-
-            $mailerSetting=$this->getSettingService()->get('mailer');
-
-            if(!$mailerSetting['enabled'] && $this->isEmptyVeryfyMobile($user)){
-                return $this->redirect($this->getTargetPath($request));
-            }
-            return $this->redirect($goto);
-          
+        if (empty($goto)) {
+            $goto = $this->generateUrl('homepage');
         }
 
-        return $this->render("TopxiaWebBundle:Register:nickname-update.html.twig", array(
-            'user' => $user,
-            'registration' => $registration,
-            ));
+        return $this->createMessageResponse('info', $this->getServiceKernel()->trans('正在跳转页面，请稍等......'), $this->getServiceKernel()->trans('注册成功'), 1, $goto);
     }
 
-    protected function isMobileRegister($registration){
-        if(isset($registration['emailOrMobile']) && !empty($registration['emailOrMobile'])){
-             if( SimpleValidator::mobile($registration['emailOrMobile'])){
+    protected function isMobileRegister($registration)
+    {
+        if (isset($registration['emailOrMobile']) && !empty($registration['emailOrMobile'])) {
+            if (SimpleValidator::mobile($registration['emailOrMobile'])) {
                 return true;
-             }
-        }elseif(isset($registration['mobile']) && !empty($registration['mobile'])){
-            if( SimpleValidator::mobile($registration['mobile'])){
+            }
+        } elseif (isset($registration['mobile']) && !empty($registration['mobile'])) {
+            if (SimpleValidator::mobile($registration['mobile'])) {
                 return true;
-             }
+            }
         }
+
         return false;
     }
 
-     protected function isEmptyVeryfyMobile($user){
-        if(isset($user['verifiedMobile']) && !empty($user['verifiedMobile'])){
-              return false;
-        }
-        return true;
-    }
-    
-
-    protected function protectiveRule($type,$ip)
+    protected function isEmptyVeryfyMobile($user)
     {
-        switch ($type) {
-            case 'middle':
-                $condition=array(
-                    'startTime'=>time()-24*3600,
-                    'createdIp'=>$ip,);
-                $registerCount=$this->getUserService()->searchUserCount($condition);
-                if($registerCount > 30 ){
-                    
-                    return false;
-                }
-                return true;
-                break;
-            case 'high':
-                $condition=array(
-                    'startTime'=>time()-24*3600,
-                    'createdIp'=>$ip,);
-                $registerCount=$this->getUserService()->searchUserCount($condition);
-                if($registerCount > 10 ){
-                    
-                    return false;
-                }
-                $registerCount=$this->getUserService()->searchUserCount(array(
-                    'startTime'=>time()-3600,
-                    'createdIp'=>$ip,));
-                if($registerCount >= 1 ){
-                    
-                    return false;
-                }
-                return true;
-                break;
-            default:
-                return true;
-                break;
+        if (isset($user['verifiedMobile']) && !empty($user['verifiedMobile'])) {
+            return false;
         }
+
+        return true;
     }
 
     public function userTermsAction(Request $request)
@@ -205,6 +159,7 @@ class RegisterController extends BaseController
     public function emailSendAction(Request $request, $id, $hash)
     {
         $user = $this->checkHash($id, $hash);
+
         if (empty($user)) {
             return $this->createJsonResponse(false);
         }
@@ -215,10 +170,8 @@ class RegisterController extends BaseController
         return $this->createJsonResponse(true);
     }
 
-
     public function submitedAction(Request $request, $id, $hash)
     {
-
         $user = $this->checkHash($id, $hash);
 
         if (empty($user)) {
@@ -226,66 +179,34 @@ class RegisterController extends BaseController
         }
 
         $auth = $this->getSettingService()->get('auth');
- 
-  
-        if(!empty($user['verifiedMobile'])){
-              return $this->redirect($this->generateUrl('homepage'));
+
+        if (!empty($user['verifiedMobile'])) {
+            return $this->redirect($this->getTargetPath($request));
         }
 
-        if($auth && $auth['register_mode'] != 'mobile' && array_key_exists('email_enabled',$auth) && ($auth['email_enabled'] == 'opened')){
-
-               return $this->render("TopxiaWebBundle:Register:email-verify.html.twig", array(
-                'user' => $user,
-                'hash' => $hash,
+        if ($auth && $auth['register_mode'] != 'mobile'
+            && array_key_exists('email_enabled', $auth)
+            && ($auth['email_enabled'] == 'opened')
+        ) {
+            return $this->render("TopxiaWebBundle:Register:email-verify.html.twig", array(
+                'user'          => $user,
+                'hash'          => $hash,
                 'emailLoginUrl' => $this->getEmailLoginUrl($user['email']),
-                '_target_path' => $this->getTargetPath($request),
-                ));
-           }else{
-                /*return $this->render("TopxiaWebBundle:Register:submited.html.twig", array(
-                'user' => $user,
-                'hash' => $hash,
-                'emailLoginUrl' => $this->getEmailLoginUrl($user['email']),
-                '_target_path' => $this->getTargetPath($request),
-                ));*/
-                $this->authenticateUser($user);
-                return $this->redirect($this->generateUrl('homepage'));
-           }
-    }
-
-    protected function getTargetPath($request)
-    {
-        if ($request->query->get('goto')) {
-            $targetPath = $request->query->get('goto');
-        } else if ($request->getSession()->has('_target_path')) {
-            $targetPath = $request->getSession()->get('_target_path');
+                '_target_path'  => $this->getTargetPath($request)
+            ));
         } else {
-            $targetPath = $request->headers->get('Referer');
+            $this->authenticateUser($user);
+            return $this->redirect($this->getTargetPath($request));
         }
-
-        if ($targetPath == $this->generateUrl('login', array(), true)) {
-            return $this->generateUrl('homepage');
-        }
-
-        $url = explode('?', $targetPath);
-
-        if ($url[0] == $this->generateUrl('partner_logout', array(), true)) {
-            return $this->generateUrl('homepage');
-        }
-
-        if ($url[0] == $this->generateUrl('password_reset_update', array(), true)) {
-            $targetPath = $this->generateUrl('homepage', array(), true);
-        }
-
-        return $targetPath;
     }
 
     public function emailVerifyAction(Request $request, $token)
     {
-
         $token = $this->getUserService()->getToken('email-verify', $token);
 
         if (empty($token)) {
             $currentUser = $this->getCurrentUser();
+
             if (empty($currentUser) || $currentUser['id'] == 0) {
                 return $this->render('TopxiaWebBundle:Register:email-verify-error.html.twig');
             } else {
@@ -294,6 +215,7 @@ class RegisterController extends BaseController
         }
 
         $user = $this->getUserService()->getUser($token['userId']);
+
         if (empty($user)) {
             return $this->createNotFoundException();
         }
@@ -301,25 +223,107 @@ class RegisterController extends BaseController
         $this->authenticateUser($user);
         $this->getUserService()->setEmailVerified($user['id']);
 
-        if (strtoupper($request->getMethod()) ==  'POST') {
+        if (strtoupper($request->getMethod()) == 'POST') {
             $this->getUserService()->deleteToken('email-verify', $token['token']);
             return $this->createJsonResponse(true);
         }
 
         return $this->render('TopxiaWebBundle:Register:email-verify-success.html.twig', array(
-            'token' => $token,
+            'token' => $token
         ));
+    }
+
+    public function resetEmailAction(Request $request, $id, $hash)
+    {
+        $user = $this->checkHash($id, $hash);
+
+        if ($request->isMethod('post')) {
+            $password = $request->request->get('password');
+            $email    = $request->request->get('email');
+
+            if ($user['email'] !== $email) {
+                throw $this->createAccessDeniedException('');
+            }
+
+            $user = $this->getUserService()->getUserByEmail($email);
+
+            if (!$this->getUserService()->verifyPassword($user['id'], $password)) {
+                $this->setFlashMessage('danger', $this->getServiceKernel()->trans('输入的密码不正确'));
+            } else {
+                $token = $this->getUserService()->makeToken('email-reset', $user['id'], strtotime('+10 minutes'), array(
+                    'password' => $password
+                ));
+                return $this->render('TopxiaWebBundle:Register:reset-email-step2.html.twig', array(
+                    'token' => $token
+                ));
+            }
+        }
+
+        if (empty($user)) {
+            throw $this->createNotFoundException("hash is error");
+        }
+
+        return $this->render('TopxiaWebBundle:Register:reset-email-step1.html.twig', array(
+            'id'   => $id,
+            'hash' => $hash,
+            'user' => $user
+        ));
+    }
+
+    public function resetEmailVerifyAction(Request $request)
+    {
+        $newEmail = $request->request->get('email');
+
+        if (empty($newEmail)) {
+            throw $this->createAccessDeniedException('email undefined');
+        }
+
+        $token = $request->request->get('token');
+        $token = $this->getUserService()->getToken('email-reset', $token);
+        if (empty($token)) {
+            return $this->createNotFoundException($this->getServiceKernel()->trans('token已失效'));
+        }
+
+        $user = $this->getUserService()->getUser($token['userId']);
+
+        if (empty($user)) {
+            throw $this->createNotFoundException('user not found');
+        }
+
+        $this->getAuthService()->changeEmail($user['id'], $token['data']['password'], $newEmail);
+        $user = $this->getUserService()->getUser($user['id']);
+        return $this->redirect($this->generateUrl('register_submited', array(
+            'id'   => $user['id'],
+            'hash' => $this->makeHash($user),
+            'goto' => $this->generateUrl('homepage')
+        )));
+    }
+
+    public function resetEmailCheckAction(Request $request)
+    {
+        $email = $request->query->get('value');
+        $email = str_replace('!', '.', $email);
+        $user  = $this->getUserService()->getUserByEmail($email);
+
+        if (empty($user)) {
+            $response = array('success' => false, 'message' => $this->getServiceKernel()->trans('该Email不存在'));
+        } else {
+            $response = array('success' => true, 'message' => '');
+        }
+
+        return $this->createJsonResponse($response);
     }
 
     protected function makeHash($user)
     {
-        $string = $user['id'] . $user['email'] . $this->container->getParameter('secret');
+        $string = $user['id'].$user['email'].$this->container->getParameter('secret');
         return md5($string);
     }
 
     protected function checkHash($userId, $hash)
     {
         $user = $this->getUserService()->getUser($userId);
+
         if (empty($user)) {
             return false;
         }
@@ -333,59 +337,75 @@ class RegisterController extends BaseController
 
     public function emailCheckAction(Request $request)
     {
-
-        $email = $request->query->get('value');
-        $email = str_replace('!', '.', $email);
+        $email                  = $request->query->get('value');
+        $email                  = str_replace('!', '.', $email);
         list($result, $message) = $this->getAuthService()->checkEmail($email);
         return $this->validateResult($result, $message);
     }
 
     public function mobileCheckAction(Request $request)
     {
-        $mobile = $request->query->get('value');
+        $mobile                 = $request->query->get('value');
         list($result, $message) = $this->getAuthService()->checkMobile($mobile);
-        
+
         return $this->validateResult($result, $message);
     }
 
-    public function emailOrMobileCheckAction(Request $request){
-        $emailOrMobile = $request->query->get('value');
-         $emailOrMobile = str_replace('!', '.', $emailOrMobile);
+    public function emailOrMobileCheckAction(Request $request)
+    {
+        $emailOrMobile          = $request->query->get('value');
+        $emailOrMobile          = str_replace('!', '.', $emailOrMobile);
         list($result, $message) = $this->getAuthService()->checkEmailOrMobile($emailOrMobile);
         return $this->validateResult($result, $message);
     }
-    protected function validateResult($result, $message){
+
+    protected function validateResult($result, $message)
+    {
         if ($result == 'success') {
-           $response = array('success' => true, 'message' => '');
+            $response = array('success' => true, 'message' => '');
         } else {
-           $response = array('success' => false, 'message' => $message);
+            $response = array('success' => false, 'message' => $message);
         }
+
         return $this->createJsonResponse($response);
     }
 
     public function nicknameCheckAction(Request $request)
     {
-        $nickname = $request->query->get('value');
-        $randomName = $request->query->get('randomName');
-        list($result, $message) = $this->getAuthService()->checkUsername($nickname,$randomName);
+        $nickname               = $request->query->get('value');
+        $randomName             = $request->query->get('randomName');
+        list($result, $message) = $this->getAuthService()->checkUsername($nickname, $randomName);
         return $this->validateResult($result, $message);
+    }
+
+    public function invitecodeCheckAction(Request $request)
+    {
+        $inviteCode = $request->query->get('value');
+        $user       = $this->getUserService()->getUserByInviteCode($inviteCode);
+
+        if (empty($user)) {
+            return $this->validateResult('false', $this->getServiceKernel()->trans('邀请码不正确'));
+        } else {
+            return $this->validateResult('success', '');
+        }
     }
 
     public function captchaModalAction()
     {
-        return $this->render('TopxiaWebBundle:Register:captcha-modal.html.twig',array());
+        return $this->render('TopxiaWebBundle:Register:captcha-modal.html.twig', array());
     }
 
     public function captchaCheckAction(Request $request)
     {
-        $captchaFilledByUser = strtolower($request->query->get('value')); 
-        
+        $captchaFilledByUser = strtolower($request->query->get('value'));
+
         if ($request->getSession()->get('captcha_code') == $captchaFilledByUser) {
-            $response = array('success' => true, 'message' => '验证码正确');
+            $response = array('success' => true, 'message' => $this->getServiceKernel()->trans('验证码正确'));
         } else {
-            $request->getSession()->set('captcha_code',mt_rand(0,999999999)); 
-            $response = array('success' => false, 'message' => '验证码错误');
+            $request->getSession()->set('captcha_code', mt_rand(0, 999999999));
+            $response = array('success' => false, 'message' => $this->getServiceKernel()->trans('验证码错误'));
         }
+
         return $this->createJsonResponse($response);
     }
 
@@ -394,42 +414,41 @@ class RegisterController extends BaseController
         return $this->getServiceKernel()->createService('User.UserFieldService');
     }
 
-    public function getEmailLoginUrl ($email)
+    public function getEmailLoginUrl($email)
     {
         $host = substr($email, strpos($email, '@') + 1);
 
         if ($host == 'hotmail.com') {
-            return 'http://www.' . $host;
+            return 'http://www.'.$host;
         }
 
         if ($host == 'gmail.com') {
             return 'http://mail.google.com';
         }
 
-        return 'http://mail.' . $host;
+        return 'http://mail.'.$host;
     }
-
 
     public function analysisAction(Request $request)
     {
-        return $this->render('TopxiaWebBundle:Register:analysis.html.twig',array());
+        return $this->render('TopxiaWebBundle:Register:analysis.html.twig', array());
     }
 
     public function captchaAction(Request $request)
     {
         $imgBuilder = new CaptchaBuilder;
         $imgBuilder->build($width = 150, $height = 32, $font = null);
-        $request->getSession()->set('captcha_code',strtolower($imgBuilder->getPhrase()));
+        $request->getSession()->set('captcha_code', strtolower($imgBuilder->getPhrase()));
 
         ob_start();
         $imgBuilder->output();
-        $str = ob_get_clean();
+        $str        = ob_get_clean();
         $imgBuilder = null;
-        
+
         $headers = array(
-            'Content-type' => 'image/jpeg',
+            'Content-type'        => 'image/jpeg',
             'Content-Disposition' => 'inline; filename="'."reg_captcha.jpg".'"');
-        
+
         return new Response($str, 200, $headers);
     }
 
@@ -453,29 +472,31 @@ class RegisterController extends BaseController
         return $this->getServiceKernel()->createService('User.AuthService');
     }
 
-    protected function  sendRegisterMessage($user)
+    protected function sendRegisterMessage($user)
     {
         $senderUser = array();
-        $auth = $this->getSettingService()->get('auth', array());
+        $auth       = $this->getSettingService()->get('auth', array());
 
         if (empty($auth['welcome_enabled'])) {
-            return ;
+            return;
         }
 
         if ($auth['welcome_enabled'] != 'opened') {
-            return ;
+            return;
         }
 
         if (empty($auth['welcome_sender'])) {
-            return ;
+            return;
         }
-        
+
         $senderUser = $this->getUserService()->getUserByNickname($auth['welcome_sender']);
+
         if (empty($senderUser)) {
-            return ;
+            return;
         }
 
         $welcomeBody = $this->getWelcomeBody($user);
+
         if (empty($welcomeBody)) {
             return true;
         }
@@ -487,35 +508,36 @@ class RegisterController extends BaseController
         $this->getMessageService()->sendMessage($senderUser['id'], $user['id'], $welcomeBody);
         $conversation = $this->getMessageService()->getConversationByFromIdAndToId($user['id'], $senderUser['id']);
         $this->getMessageService()->deleteConversation($conversation['id']);
-
     }
 
     protected function getWelcomeBody($user)
     {
-        $site = $this->getSettingService()->get('site', array());
+        $site              = $this->getSettingService()->get('site', array());
         $valuesToBeReplace = array('{{nickname}}', '{{sitename}}', '{{siteurl}}');
-        $valuesToReplace = array($user['nickname'], $site['name'], $site['url']);
-        $welcomeBody = $this->setting('auth.welcome_body', '注册欢迎的内容');
-        $welcomeBody = str_replace($valuesToBeReplace, $valuesToReplace, $welcomeBody);
-        return $welcomeBody;
+        $valuesToReplace   = array($user['nickname'], $site['name'], $site['url']);
+        $welcomeBody       = $this->setting('auth.welcome_body', $this->getServiceKernel()->trans('注册欢迎的内容'));
+        return str_replace($valuesToBeReplace, $valuesToReplace, $welcomeBody);
     }
 
     protected function sendVerifyEmail($token, $user)
     {
-        $site = $this->getSettingService()->get('site', array());
-        $emailTitle = $this->setting('auth.email_activation_title',
-            '请激活你的帐号 完成注册');
-        $emailBody = $this->setting('auth.email_activation_body', ' 验证邮箱内容');
-
-        $valuesToBeReplace = array('{{nickname}}', '{{sitename}}', '{{siteurl}}', '{{verifyurl}}');
-        $verifyurl = $this->generateUrl('register_email_verify', array('token' => $token), true);
-        $valuesToReplace = array($user['nickname'], $site['name'], $site['url'], $verifyurl);
-        $emailTitle = str_replace($valuesToBeReplace, $valuesToReplace, $emailTitle);
-        $emailBody = str_replace($valuesToBeReplace, $valuesToReplace, $emailBody);
         try {
-            $this->sendEmail($user['email'], $emailTitle, $emailBody);
-        } catch(\Exception $e) {
-            $this->getLogService()->error('user', 'register', '注册激活邮件发送失败:' . $e->getMessage());
+            $site        = $this->getSettingService()->get('site', array());
+            $verifyurl   = $this->generateUrl('register_email_verify', array('token' => $token), true);
+            $mailOptions = array(
+                'to'       => $user['email'],
+                'template' => 'email_registration',
+                'params'   => array(
+                    'sitename'  => $site['name'],
+                    'siteurl'   => $site['url'],
+                    'verifyurl' => $verifyurl,
+                    'nickname'  => $user['nickname']
+                )
+            );
+            $mail = MailFactory::create($mailOptions);
+            $mail->send();
+        } catch (\Exception $e) {
+            $this->getLogService()->error('user', 'register', '注册激活邮件发送失败:'.$e->getMessage());
         }
     }
 
@@ -524,46 +546,38 @@ class RegisterController extends BaseController
         return $this->container->get('topxia.twig.web_extension');
     }
 
-
     //validate captcha
-    protected function captchaEnabledValidator($authSettings,$registration,$request){
-         if (array_key_exists('captcha_enabled',$authSettings) && ($authSettings['captcha_enabled'] == 1) && !isset($registration['mobile'])){                
+    protected function captchaEnabledValidator($authSettings, $registration, $request)
+    {
+        if (array_key_exists('captcha_enabled', $authSettings) && ($authSettings['captcha_enabled'] == 1) && !isset($registration['mobile'])) {
             $captchaCodePostedByUser = strtolower($registration['captcha_code']);
-            $captchaCode = $request->getSession()->get('captcha_code');                   
-            if (!isset($captchaCodePostedByUser)||strlen($captchaCodePostedByUser)<5){   
-                throw new \RuntimeException('验证码错误。');    
-            }                   
-            if (!isset($captchaCode)||strlen($captchaCode)<5){    
-                throw new \RuntimeException('验证码错误。');    
+            $captchaCode             = $request->getSession()->get('captcha_code');
+
+            if (!isset($captchaCodePostedByUser) || strlen($captchaCodePostedByUser) < 5) {
+                throw new \RuntimeException($this->getServiceKernel()->trans('验证码错误。'));
             }
-            if ($captchaCode != $captchaCodePostedByUser){ 
-                $request->getSession()->set('captcha_code',mt_rand(0,999999999));  
-                throw new \RuntimeException('验证码错误。');
+
+            if (!isset($captchaCode) || strlen($captchaCode) < 5) {
+                throw new \RuntimeException($this->getServiceKernel()->trans('验证码错误。'));
             }
-            $request->getSession()->set('captcha_code',mt_rand(0,999999999));
+
+            if ($captchaCode != $captchaCodePostedByUser) {
+                $request->getSession()->set('captcha_code', mt_rand(0, 999999999));
+                throw new \RuntimeException($this->getServiceKernel()->trans('验证码错误。'));
+            }
+
+            $request->getSession()->set('captcha_code', mt_rand(0, 999999999));
         }
     }
 
-    protected function smsCodeValidator($authSettings,$registration,$request){
-
-        if ( 
-            ($authSettings['register_mode'] == 'mobile' or $authSettings['register_mode'] == 'email_or_mobile')
-            &&isset($registration['mobile']) && !empty($registration['mobile'])
-            &&($this->setting('cloud_sms.sms_enabled') == '1')
-            &&($this->setting('cloud_sms.sms_registration') == 'on')){
+    protected function smsCodeValidator($authSettings, $registration)
+    {
+        if (
+            in_array($authSettings['register_mode'], array('mobile', 'email_or_mobile'))
+            && isset($registration['mobile']) && !empty($registration['mobile'])
+            && $this->setting('cloud_sms.sms_enabled') == '1'
+        ) {
             return true;
-
-        }
-    }
-
-    protected function registerLimitValidator($registration, $authSettings, $request){
-        $registration['createdIp'] = $request->getClientIp();
-
-        if(isset($authSettings['register_protective'])){
-            $status=$this->protectiveRule($authSettings['register_protective'],$registration['createdIp']);
-            if(!$status){
-                return  true;
-            }
         }
     }
 }

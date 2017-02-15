@@ -1,12 +1,11 @@
 <?php
 namespace Topxia\Service\Thread\Impl;
 
-use Topxia\Service\Thread\AbstractThreadFirewall;
 use Topxia\Service\Common\ServiceKernel;
+use Topxia\Service\Thread\AbstractThreadFirewall;
 
 class ClassroomThreadFirewall extends AbstractThreadFirewall
 {
-
     public function accessThreadRead($thread)
     {
         return $this->getClassroomService()->canLookClassroom($thread['targetId']);
@@ -14,6 +13,23 @@ class ClassroomThreadFirewall extends AbstractThreadFirewall
 
     public function accessThreadCreate($thread)
     {
+        $user = $this->getCurrentUser();
+        $member = $this->getClassroomService()->getClassroomMember($thread['targetId'], $user['id']);
+
+        $classroom = $this->getClassroomService()->getClassroom($thread['targetId']);
+
+        if(!empty($member['levelId']) 
+            && empty($classroom['vipLevelId'])) {
+            return false;
+        }
+
+        if ($this->isVipPluginEnabled() 
+            && $this->getSettingService()->setting('vip.enabled', 0) 
+            && !empty($member['levelId']) 
+            && $this->getVipService()->checkUserInMemberLevel($user['id'], $classroom['vipLevelId']) != 'ok') {
+            return false;
+        }
+
         return $this->getClassroomService()->canLookClassroom($thread['targetId']);
     }
 
@@ -64,10 +80,10 @@ class ClassroomThreadFirewall extends AbstractThreadFirewall
 
     public function accessPostAdopted($post)
     {
-        return $this->getClassroomService()->canLookClassroom($post['targetId']);
+        $result = $this->getClassroomService()->canLookClassroom($post['targetId']);
+        return $result;
     }
-    
-    
+
     public function accessEventCreate($resource)
     {
         return $this->getClassroomService()->canCreateThreadEvent($resource);
@@ -80,6 +96,7 @@ class ClassroomThreadFirewall extends AbstractThreadFirewall
         }
 
         $user = $this->getCurrentUser();
+
         if ($member['userId'] == $user['id']) {
             return true;
         }
@@ -89,12 +106,13 @@ class ClassroomThreadFirewall extends AbstractThreadFirewall
 
     protected function hasManagePermission($resource, $ownerCanManage = false)
     {
-        if ($this->getClassroomService()->canManageClassroom($resource['targetId'])) {
+        if ($this->getClassroomService()->canManageClassroom($resource['targetId'], 'admin_course_thread')) {
             return true;
         }
 
         $user = $this->getCurrentUser();
-        if ($ownerCanManage && ($resource['userId'] == $user['id'])) {
+
+        if ($ownerCanManage && $resource['userId'] == $user['id']) {
             return true;
         }
 
@@ -106,9 +124,32 @@ class ClassroomThreadFirewall extends AbstractThreadFirewall
         return ServiceKernel::instance()->createService('Classroom:Classroom.ClassroomService');
     }
 
+    protected function getVipService()
+    {
+        return ServiceKernel::instance()->createService('Vip:Vip.VipService');
+    }
+
     protected function getKernel()
     {
         return ServiceKernel::instance();
+    }
+
+    protected function isVipPluginEnabled()
+    {
+        $setting = $this->getSettingService()->get('vip');
+        return $this->isPluginInstalled('Vip') && !empty($setting['enabled']);
+    }
+
+    protected function isPluginInstalled($code)
+    {
+        $app = ServiceKernel::instance()->createService('CloudPlatform.AppService')->getAppByCode($code);
+        return !empty($app);
+        
+    }
+
+    protected function getSettingService()
+    {
+        return ServiceKernel::instance()->createService('System.SettingService');
     }
 
     public function getCurrentUser()

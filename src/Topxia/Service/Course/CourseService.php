@@ -2,379 +2,412 @@
 
 namespace Topxia\Service\Course;
 
-use Symfony\Component\HttpFoundation\File\UploadedFile;
-
 interface CourseService
 {
+    /**
+     * 每个课程可添加的最大的教师人数
+     */
+    const MAX_TEACHER = 100;
 
-	/**
-	 * 每个课程可添加的最大的教师人数
-	 */
-	const MAX_TEACHER = 100;
+    /**
+     * Course API
+     */
 
-	/**
-	 * Course API
-	 */
+    public function getCourse($id);
 
-	public function getCourse($id);
+    public function findCoursesByIds(array $ids);
 
-	public function getCoursesCount();
+    public function findCoursesByParentIdAndLocked($parentId, $locked);
 
-	public function findCoursesByIds(array $ids);
+    public function findCoursesByCourseIds(array $ids, $start, $limit);
 
-	public function findCoursesByParentIdAndLocked($parentId, $locked);
-	
-	public function findCoursesByCourseIds(array $ids, $start, $limit);
+    public function findCoursesByLikeTitle($title);
 
-	public function findCoursesByLikeTitle($title);
+    public function findMinStartTimeByCourseId($courseId);
 
-	public function findMinStartTimeByCourseId($courseId);
+    public function findNormalCoursesByAnyTagIdsAndStatus(array $tagIds, $status, $orderBy, $start, $limit);
 
-	public function findCoursesByTagIdsAndStatus(array $tagIds, $status, $start, $limit);
+    public function searchCourses($conditions, $sort, $start, $limit);
 
-	public function findNormalCoursesByAnyTagIdsAndStatus(array $tagIds, $status, $orderBy, $start, $limit);
+    public function searchCourseCount($conditions);
 
-	public function searchCourses($conditions, $sort, $start, $limit);
+    public function findCoursesCountByLessThanCreatedTime($endTime);
 
-	public function searchCourseCount($conditions);
-
-	public function findCoursesCountByLessThanCreatedTime($endTime);
-    	
     public function analysisCourseSumByTime($endTime);
 
-	public function findUserLearnCourses($userId, $start, $limit);
+    public function findUserLearnCourses($userId, $start, $limit);
 
-	public function findUserLearnCoursesNotInClassroom($userId, $start, $limit);//
+    public function findUserLearnCoursesNotInClassroom($userId, $start, $limit); //
 
-	public function findUserLearnCourseCount($userId);
+    public function findUserLearnCourseCount($userId);
 
-	public function findUserLearnCourseCountNotInClassroom($userId);//
- 
-	public function findUserLeaningCourses($userId, $start, $limit, $filters = array());
+    public function findUserLearnCourseCountNotInClassroom($userId); //
 
-	public function findUserLeaningCourseCount($userId, $filters = array());
+    public function findUserLeaningCourses($userId, $start, $limit, $filters = array());
 
-	public function findUserLeanedCourseCount($userId, $filters = array());
+    public function findUserLeaningCourseCount($userId, $filters = array());
 
-	public function findUserLeanedCourses($userId, $start, $limit, $filters = array());
+    public function findUserLeanedCourseCount($userId, $filters = array());
 
-	public function findUserTeachCourseCount($conditions, $onlyPublished = true);
-	
-	public function findUserTeachCourses($conditions, $start, $limit, $onlyPublished = true);
+    public function findUserLeanedCourses($userId, $start, $limit, $filters = array());
 
-	public function findUserFavoritedCourseCount($userId);
+    public function findUserTeachCourseCount($conditions, $onlyPublished = true);
 
-	public function findUserFavoritedCourses($userId, $start, $limit);
+    public function findUserTeachCourses($conditions, $start, $limit, $onlyPublished = true);
 
-	public function createCourse($course);
+    public function findUserFavoritedCourseCount($userId);
 
-	public function updateCourse($id, $fields);
+    public function findUserFavoritedCourses($userId, $start, $limit);
 
-	public function updateCourseCounter($id, $counter);
+    public function findRandomCourses($conditions, $num);
 
-	public function changeCoursePicture ($courseId, $files);
+    public function createCourse($course);
 
-	public function recommendCourse($id, $number);
+    public function updateCourse($id, $fields);
 
-	public function hitCourse($id);
+    public function batchUpdateOrg($courseIds, $orgCode);
 
-	public function waveCourse($id, $field, $diff);
+    public function updateCourseCounter($id, $counter);
 
-	public function cancelRecommendCourse($id);
+    public function changeCoursePicture($courseId, $files);
 
-	public function analysisCourseDataByTime($startTime,$endTime);
-	
-	public function findLearnedCoursesByCourseIdAndUserId($courseId,$userId);
+    public function recommendCourse($id, $number);
 
-	public function uploadCourseFile($targetType, $targetId, array $fileInfo, $implemtor, UploadedFile $originalFile);
+    public function hitCourse($id);
 
-	public function setCoursePrice($courseId, $currency, $price);
+    public function waveCourse($id, $field, $diff);
 
-	public function setCoursesPriceWithDiscount($discountId);
+    public function cancelRecommendCourse($id);
 
-	public function revertCoursesPriceWithDiscount($discountId);
+    public function analysisCourseDataByTime($startTime, $endTime);
 
-	/**
-	 * 删除课程
-	 */
-	public function deleteCourse($id);
+    public function findLearnedCoursesByCourseIdAndUserId($courseId, $userId);
 
-	public function publishCourse($id);
+    public function setCoursePrice($courseId, $currency, $price);
 
-	public function closeCourse($id);
+    public function setCoursesPriceWithDiscount($discountId);
 
+    public function revertCoursesPriceWithDiscount($discountId);
 
-	/**
-	 * Lesson API
-	 */
+    /**
+     * 删除课程
+     */
+    public function deleteCourse($id);
 
-	public function getLesson($id);
+    public function publishCourse($id);
 
-	public function setCourseLessonMaxOnlineNum($lessonId,$num);
+    public function closeCourse($id);
 
-	public function findLessonsByIds(array $ids);
+    /**
+     * Lesson API
+     */
 
-	public function findLessonsByCopyIdAndLockedCourseIds($copyId ,array $courseIds);
+    public function getLesson($id);
 
-	public function getCourseLesson($courseId, $lessonId);
+    public function setCourseLessonMaxOnlineNum($lessonId, $num);
 
-	public function findCourseDraft($courseId,$lessonId, $userId);
+    public function findLessonsByIds(array $ids);
 
-	public function getCourseLessons($courseId);
+    public function findLessonsByCopyIdAndLockedCourseIds($copyId, array $courseIds);
 
-	public function deleteCourseDrafts($courseId,$lessonId, $userId);
+    public function getCourseLesson($courseId, $lessonId);
 
-	public function findLessonsByTypeAndMediaId($type, $mediaId);
+    public function findCourseDraft($courseId, $lessonId, $userId);
 
-	public function searchLessons($conditions, $orderBy, $start, $limit);
+    public function getCourseLessons($courseId);
 
-	public function searchLessonCount($conditions);
+    public function deleteCourseDrafts($courseId, $lessonId, $userId);
 
-	public function createLesson($lesson);
+    public function findLessonsByTypeAndMediaId($type, $mediaId);
 
-	public function getCourseDraft($id);
+    public function searchLessons($conditions, $orderBy, $start, $limit);
 
-	public function createCourseDraft($draft);
+    public function searchLessonCount($conditions);
 
-	public function updateLesson($courseId, $lessonId, $fields);
+    public function createLesson($lesson);
 
-	public function updateCourseDraft($courseId,$lessonId, $userId,$fields);
+    public function createLessonByFileId($courseId, $fileId);
 
-	public function deleteLesson($courseId, $lessonId);
+    public function getCourseDraft($id);
 
-	public function publishLesson($courseId, $lessonId);
+    public function createCourseDraft($draft);
 
-	public function unpublishLesson($courseId, $lessonId);
+    public function updateLesson($courseId, $lessonId, $fields);
 
-	public function getNextLessonNumber($courseId);
+    public function updateCourseDraft($courseId, $lessonId, $userId, $fields);
 
-	public function liveLessonTimeCheck($courseId,$lessonId,$startTime,$length);
+    public function deleteLesson($courseId, $lessonId);
 
-	public function calculateLiveCourseLeftCapacityInTimeRange($startTime, $endTime, $excludeLessonId);
+    public function sumLessonGiveCreditByLessonIds($lessonIds);
 
-	public function canLearnLesson($courseId, $lessonId);
+    public function publishLesson($courseId, $lessonId);
 
-	public function startLearnLesson($courseId, $lessonId);
+    public function unpublishLesson($courseId, $lessonId);
 
-	public function createLessonView($createLessonView);
+    public function resetLessonMediaId($lessonId);
 
-	public function finishLearnLesson($courseId, $lessonId);
+    public function getNextLessonNumber($courseId);
 
-	public function findLatestFinishedLearns($start, $limit);
+    public function liveLessonTimeCheck($courseId, $lessonId, $startTime, $length);
 
-	public function cancelLearnLesson($courseId, $lessonId);
+    public function calculateLiveCourseLeftCapacityInTimeRange($startTime, $endTime, $excludeLessonId);
 
-	public function getUserLearnLessonStatus($userId, $courseId, $lessonId);
+    public function canLearnLesson($courseId, $lessonId);
 
-	public function getUserLearnLessonStatuses($userId, $courseId);
+    public function startLearnLesson($courseId, $lessonId);
 
-	public function getLearnByUserIdAndLessonId($userId, $lessonId);
+    public function createLessonView($createLessonView);
 
-	public function findUserLearnedLessons($userId, $courseId);
+    public function finishLearnLesson($courseId, $lessonId);
 
-	public function getUserNextLearnLesson($userId, $courseId);
+    public function findLatestFinishedLearns($start, $limit);
 
-	public function searchLearnCount($conditions);
+    public function cancelLearnLesson($courseId, $lessonId);
 
-	public function searchLearns($conditions,$orderBy,$start,$limit);
+    public function getUserLearnLessonStatus($userId, $courseId, $lessonId);
 
-	public function analysisLessonDataByTime($startTime,$endTime);
+    public function getUserLearnLessonStatuses($userId, $courseId);
 
-	public function analysisLessonFinishedDataByTime($startTime,$endTime);
+    public function getLearnByUserIdAndLessonId($userId, $lessonId);
 
-	public function searchAnalysisLessonViewCount($conditions);
+    public function findUserLearnedLessons($userId, $courseId);
 
-	public function getAnalysisLessonMinTime($type);
+    public function getUserNextLearnLesson($userId, $courseId);
 
-	public function searchAnalysisLessonView($conditions, $orderBy, $start, $limit);
+    public function searchLearnCount($conditions);
 
-	public function analysisLessonViewDataByTime($startTime,$endTime,$conditions);
+    public function searchLearns($conditions, $orderBy, $start, $limit);
 
-	public function waveLearningTime($userId, $lessonId, $time);
+    public function analysisLessonDataByTime($startTime, $endTime);
 
-	public function findLearnsCountByLessonId($lessonId);
+    public function findFutureLiveDates($courseIds, $limit);
 
-	public function waveWatchingTime($userId,$lessonId,$time);
+    public function findFutureLiveCourseIds();
 
-	public function searchLearnTime($conditions);
+    public function findPastLiveCourseIds();
 
-	public function searchWatchTime($conditions);
+    public function analysisLessonFinishedDataByTime($startTime, $endTime);
 
-	public function checkWatchNum($userId, $lessonId);
-	/**
-	 * Chapter API
-	 */
-	
-	public function getChapter($courseId, $chapterId);
+    public function searchAnalysisLessonViewCount($conditions);
 
-	public function getCourseChapters($courseId);
+    public function getAnalysisLessonMinTime($type);
 
-	public function createChapter($chapter);
+    public function searchAnalysisLessonView($conditions, $orderBy, $start, $limit);
 
-	public function updateChapter($courseId, $chapterId, $fields);
+    public function analysisLessonViewDataByTime($startTime, $endTime, $conditions);
 
-	public function deleteChapter($courseId, $chapterId);
+    public function waveLearningTime($userId, $lessonId, $time);
 
-	public function getNextChapterNumber($courseId);
+    public function findLearnsCountByLessonId($lessonId);
 
-	public function findChaptersByCopyIdAndLockedCourseIds($copyId, $courseIds);
+    public function waveWatchingTime($userId, $lessonId, $time);
 
-	/**
-	 * 获得课程的目录项
-	 * 
-	 * 目录项包含，章节、课时、测验
-	 * 
-	 */
-	public function getCourseItems($courseId);
+    public function searchLearnTime($conditions);
 
-	public function sortCourseItems($courseId, array $itemIds);
+    public function searchWatchTime($conditions);
 
-	/**
-	 * Member API
-	 */
+    public function checkWatchNum($userId, $lessonId);
+    /**
+     * Chapter API
+     */
 
-	public function searchMembers($conditions, $orderBy, $start, $limit);
+    public function getChapter($courseId, $chapterId);
 
-	public function searchMember($conditions, $start, $limit);
+    public function getCourseChapters($courseId);
 
-	public function countMembersByStartTimeAndEndTime($startTime,$endTime);
-	
-	public function searchMemberCount($conditions);
+    public function createChapter($chapter);
 
-	public function findWillOverdueCourses();
+    public function updateChapter($courseId, $chapterId, $fields);
 
-	public function getCourseMember($courseId, $userId);
+    public function deleteChapter($courseId, $chapterId);
 
-	public function searchMemberIds($conditions, $sort, $start, $limit);
+    public function getNextChapterNumber($courseId);
 
-	public function findMemberUserIdsByCourseId($courseId);
+    public function findChaptersByCopyIdAndLockedCourseIds($copyId, $courseIds);
 
-	public function updateCourseMember($id, $fields);
+    /**
+     * 获得课程的目录项
+     *
+     * 目录项包含，章节、课时、测验
+     *
+     */
+    public function getCourseItems($courseId);
 
-	public function isMemberNonExpired($course, $member);
+    public function sortCourseItems($courseId, array $itemIds);
 
-	public function findCourseStudents($courseId, $start, $limit);
+    /**
+     * Member API
+     */
 
-	public function findCourseStudentsByCourseIds($courseIds);
+    public function searchMembers($conditions, $orderBy, $start, $limit);
 
-	public function findMobileVerifiedMemberCountByCourseId($courseId, $locked);
+    public function searchMember($conditions, $start, $limit);
 
-	public function getCourseStudentCount($courseId);
+    public function countMembersByStartTimeAndEndTime($startTime, $endTime);
 
-	public function findCourseTeachers($courseId);
+    public function searchMemberCount($conditions);
 
-	public function isCourseTeacher($courseId, $userId);
-	
-	public function isCourseStudent($courseId, $userId);
+    public function searchMemberCountGroupByFields($conditions, $groupBy, $start, $limit);
 
-	public function setCourseTeachers($courseId, $teachers);
+    public function findWillOverdueCourses();
 
-	public function cancelTeacherInAllCourses($userId);
+    public function getCourseMember($courseId, $userId);
 
-	public function remarkStudent($courseId, $userId, $remark);
+    public function searchMemberIds($conditions, $sort, $start, $limit);
 
-	public function deleteMemberByCourseIdAndUserId($courseId, $userId);
+    public function findMemberUserIdsByCourseId($courseId);
 
-	public function deleteMemberByCourseIdAndRole($courseId,$role);
+    public function updateCourseMember($id, $fields);
 
-	public function deleteMemberByCourseId($courseId);
+    public function updateMembers($conditions, $updateFields);
 
-	/**
-	 * 成为学员，即加入课程的学习
-	 */
-	public function becomeStudent($courseId, $userId);
+    public function isMemberNonExpired($course, $member);
 
-	/**
-	 * 退学
-	 */
-	public function removeStudent($courseId, $userId);
+    public function findCourseStudents($courseId, $start, $limit);
 
+    public function findCourseStudentsByCourseIds($courseIds);
 
+    public function findMobileVerifiedMemberCountByCourseId($courseId, $locked);
 
-	/**
-	 * 封锁学员，封锁之后学员不能再查看该课程
-	 */
-	public function lockStudent($courseId, $userId);
+    public function getCourseStudentCount($courseId);
 
-	/**
-	 * 解封学员
-	 */
-	public function unlockStudent($courseId, $userId);
-	
-	/**
-	 * 尝试管理课程, 无权限则抛出异常
-	 * 例如：编辑、上传资料...
-	 * 
-	 * @param  Integer $courseId 课程ID
-	 * @return array 课程信息
-	 */
-	public function tryManageCourse($courseId);
+    public function findCourseTeachers($courseId);
 
-	/**
-	 * 是否可以管理课程
-	 * 
-	 * 注意： 如果课程不存在，且当前操作用户为管理员时，返回true。
-	 * 
-	 */
-	public function canManageCourse($courseId);
+    public function isCourseTeacher($courseId, $userId);
 
-	/**
-	 * 尝试使用课程
-	 * 例如：查看收费课时、提问、下载资料...
-	 * 
-	 * @param  Integer $courseId 课程ID
-	 * @return array 课程信息
-	 */
-	public function tryTakeCourse($courseId);
+    public function isCourseStudent($courseId, $userId);
 
-	/**
-	 * 是否可以使用课程
-	 */
-	public function canTakeCourse($course);
+    public function isCourseMember($courseId, $userId);
 
-	/**
-	 * 尝试学习课程
-	 * 
-	 * 只有是课程的学员/教师，才可以学习。
-	 * 
-	 * @param  [type] $courseId 课程ID
-	 * @return array
-	 */
-	public function tryLearnCourse($courseId);
+    public function setCourseTeachers($courseId, $teachers);
 
-	public function increaseLessonQuizCount($lessonId);
-	
-	public function resetLessonQuizCount($lessonId,$count);
-	
-	public function increaseLessonMaterialCount($lessonId);
-	
-	public function resetLessonMaterialCount($lessonId,$count);
+    public function cancelTeacherInAllCourses($userId);
 
-	public function setMemberNoteNumber($courseId, $userId, $number);
+    public function remarkStudent($courseId, $userId, $remark);
 
-	public function favoriteCourse($courseId);
+    public function deleteMemberByCourseIdAndUserId($courseId, $userId);
 
-	public function unFavoriteCourse($courseId);
+    public function deleteMemberByCourseIdAndRole($courseId, $role);
 
-	public function hasFavoritedCourse($courseId);
+    public function deleteMemberByCourseId($courseId);
 
-	public function generateLessonReplay($courseId,$lessonId);
-	
-	public function entryReplay($lessonId, $courseLessonReplayId);
+    public function findMembersByUserIdAndJoinType($userId, $joinedType = 'course');
 
-	public function getCourseLessonReplayByLessonId($lessonId);
+    public function quitCourseByDeadlineReach($userId, $courseId);
 
-	public function deleteCourseLessonReplayByLessonId($lessonId);
+    /**
+     * 成为学员，即加入课程的学习
+     */
+    public function becomeStudent($courseId, $userId);
 
-	public function createMemberByClassroomJoined($courseId, $userId, $classRoomId, array $info);
+    /**
+     * 退学
+     */
+    public function removeStudent($courseId, $userId);
 
-	public function findCoursesByStudentIdAndCourseIds($studentId, $courseIds);
+    /**
+     * 封锁学员，封锁之后学员不能再查看该课程
+     */
+    public function lockStudent($courseId, $userId);
 
-	public function becomeStudentByClassroomJoined($courseId, $userId);
+    /**
+     * 解封学员
+     */
+    public function unlockStudent($courseId, $userId);
 
-	public function addCourseLessonReplay($courseLessonReplay);
+    /**
+     * 尝试管理课程, 无权限则抛出异常
+     * 例如：编辑、上传资料...
+     *
+     * @param  Integer $courseId      课程ID
+     * @return array   课程信息
+     */
+    public function tryManageCourse($courseId);
 
-	public function deleteLessonReplayByLessonId($lessonId);
+    /**
+     * 是否可以管理课程
+     *
+     * 注意： 如果课程不存在，且当前操作用户为管理员时，返回true。
+     *
+     */
+    public function canManageCourse($courseId);
 
-	public function getCourseLessonReplayByCourseIdAndLessonId($courseId, $lessonId);
+    /**
+     * 尝试使用课程
+     * 例如：查看收费课时、提问、下载资料...
+     *
+     * @param  Integer $courseId      课程ID
+     * @return array   课程信息
+     */
+    public function tryTakeCourse($courseId);
+
+    /**
+     * 是否可以使用课程
+     */
+    public function canTakeCourse($course);
+
+    /**
+     * 尝试学习课程
+     *
+     * 只有是课程的学员/教师，才可以学习。
+     *
+     * @param  [type]  $courseId 课程ID
+     * @return array
+     */
+    public function tryLearnCourse($courseId);
+
+    public function increaseLessonQuizCount($lessonId);
+
+    public function resetLessonQuizCount($lessonId, $count);
+
+    public function increaseLessonMaterialCount($lessonId);
+
+    public function resetLessonMaterialCount($lessonId, $count);
+
+    public function setMemberNoteNumber($courseId, $userId, $number);
+
+    public function favoriteCourse($courseId);
+
+    public function unFavoriteCourse($courseId);
+
+    public function hasFavoritedCourse($courseId);
+
+    public function searchCourseFavoriteCount($conditions);
+
+    public function searchCourseFavorites($conditions, $orderBy, $start, $limit);
+
+    public function generateLessonReplay($courseId, $lessonId);
+
+    public function generateLessonVideoReplay($courseId, $lessonId, $fileId);
+
+    public function entryReplay($lessonId, $courseLessonReplayId, $ssl = false);
+
+    public function getCourseLessonReplayByLessonId($lessonId, $lessonType);
+
+    public function deleteCourseLessonReplayByLessonId($lessonId);
+
+    public function createMemberByClassroomJoined($courseId, $userId, $classRoomId, array $info);
+
+    public function findCoursesByStudentIdAndCourseIds($studentId, $courseIds);
+
+    public function becomeStudentByClassroomJoined($courseId, $userId);
+
+    public function addCourseLessonReplay($courseLessonReplay);
+
+    public function deleteLessonReplayByLessonId($lessonId, $lessonType);
+
+    public function getCourseLessonReplayByCourseIdAndLessonId($courseId, $lessonId, $lessonType);
+
+    public function getCourseLessonReplay($id);
+
+    public function updateCourseLessonReplay($id, $fields);
+
+    public function updateCourseLessonReplayByLessonId($lessonId, $fields, $lessonType);
+
+    public function searchCourseLessonReplayCount($conditions);
+
+    public function searchCourseLessonReplays($conditions, $orderBy, $start, $limit);
+
+    public function findReplaysByCourseIdAndLessonId($courseId, $lessonId, $lessonType = 'live');
+
 }

@@ -8,9 +8,10 @@
     {% if emailArr[1] != 'edusoho.net' %}
       {{ user.email }}
     {% else %}
-      暂无
+      {{'暂无'|trans}}
     {% endif %}
   </td>
+  {% include 'OrgBundle:Org/Parts:table-body-td.html.twig' with {orgCode: user.orgCode}%}
   <td>
     <span class="text-sm">{{ logRecord.createdTime|date('Y-n-d H:i:s') }}</span>
     <br>
@@ -20,6 +21,6 @@
     {{ logRecord.location }}
   </td>
   <td>
-    <a href="#modal" data-toggle="modal" data-url="{{ path('admin_login_record_details', {id:user.id}) }}" data-url="" class="btn btn-default btn-sm">查看</a>
+    <a href="#modal" data-toggle="modal" data-url="{{ path('admin_login_record_details', {id:user.id}) }}" data-url="" class="btn btn-default btn-sm">{{'查看'|trans}}</a>
   </td>
 </tr>

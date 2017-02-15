@@ -28,18 +28,32 @@ define(function(require, exports, module) {
             }
             return  result;  
         },
-            "{{display}}格式错误"
+          Translator.trans('%display%格式错误',{display:'{{display}}'})
     );
+
+    Validator.addRule(
+            'nickname',
+            function(options, commit){
+                var nickname = options.element.val();
+                var reg_nickname = /^1\d{10}$/;
+                var result = false;
+                var isNickname = reg_nickname.test(nickname);
+
+                if(!isNickname){
+                    result = true;
+                }
+                return result;
+            },
+                Translator.trans('%display%不允许以1开头的11位纯数字',{display:'{{display}}'})
+        );
 
     exports.run = function() {
         $(".date").datetimepicker({
-            language: 'zh-CN',
             autoclose: true,
             format: 'yyyy-mm-dd',
             minView: 'month'
         });
-        var $form = $('#register-form');
-        
+        var $form = $('#register-form');        
         var validator = new Validator({
             element: $form,
             onFormValidated: function(error, results, $form) {
@@ -62,7 +76,7 @@ define(function(require, exports, module) {
                 required: true,
                 rule: 'alphanumeric remote',
                 onItemValidated: function(error, message, eleme) {
-                    if (message == "验证码错误"){
+                    if (message == Translator.trans('验证码错误')){
                         $("#getcode_num").attr("src",$("#getcode_num").data("url")+ "?" + Math.random()); 
                     }
                 }                
@@ -99,7 +113,7 @@ define(function(require, exports, module) {
                 element: '[name="emailOrMobile"]',
                 required: true,
                 rule: 'email_or_mobile_check email_or_mobile_remote',
-                display: '手机/邮箱',
+                display: Translator.trans('手机/邮箱'),
                 onItemValidated: function(error, message, eleme) {
                     if (error) {
                         $('.js-sms-send').addClass('disabled');
@@ -114,20 +128,29 @@ define(function(require, exports, module) {
         validator.addItem({
             element: '[name="nickname"]', 
             required: true,
-            rule: 'chinese_alphanumeric byte_minlength{min:4} byte_maxlength{max:18} remote'
+            rule: 'chinese_alphanumeric byte_minlength{min:4} byte_maxlength{max:18} nickname remote'
         });
 
         validator.addItem({
             element: '[name="password"]',
             required: true,
             rule: 'minlength{min:5} maxlength{max:20}',
-            display: '密码'
+            display: Translator.trans('密码')
         });
+        if($('.invitecode').length>0){  
+        validator.addItem({
+            element: '[name="invite_code"]',
+            required: false,
+            rule: 'reg_inviteCode invitecode_remote',
+            display: Translator.trans('邀请码')
+        });
+        }
+
 
         validator.addItem({
             element: '#user_terms',
             required: true,
-            errormessageRequired: '勾选同意此服务协议，才能继续注册'
+            errormessageRequired: Translator.trans('勾选同意此服务协议，才能继续注册')
         });
 
 
@@ -150,7 +173,7 @@ define(function(require, exports, module) {
                     element: '[name="sms_code"]',
                     required: true,
                     rule: 'integer fixedLength{len:6} remote',
-                    display: '短信验证码'           
+                    display: Translator.trans('短信验证码')           
                 });
 
                 validator.removeItem('[name="captcha_code"]');
@@ -168,11 +191,11 @@ define(function(require, exports, module) {
             }else{
 
                 validator.addItem({
-                    element: '[name="captcha_num"]',
+                    element: '[name="captcha_code"]',
                     required: true,
                     rule: 'alphanumeric remote',
                     onItemValidated: function(error, message, eleme) {
-                        if (message == "验证码错误"){
+                        if (message == Translator.trans('验证码错误')){
                             $("#getcode_num").attr("src",$("#getcode_num").data("url")+ "?" + Math.random()); 
                         }
                     }                

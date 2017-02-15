@@ -8,6 +8,8 @@ interface ClassroomService
 
     public function updateClassroom($id, $fields);
 
+    public function batchUpdateOrg($classroomIds, $orgCode);
+
     public function waveClassroom($id, $field, $diff);
 
     public function findClassroomsByIds(array $ids);
@@ -75,6 +77,8 @@ interface ClassroomService
 
     public function findClassroomsByCoursesIds($courseIds);
 
+    public function getClassroomByCourseId($courseId);
+
     // 内部方法
     public function updateClassroomTeachers($id);
 
@@ -93,6 +97,8 @@ interface ClassroomService
     public function isClassroomAssistant($classroomId, $userId);
 
     public function isClassroomHeadTeacher($classroomId, $userId);
+
+    public function updateMember($id, $member);
 
     public function searchMemberCount($conditions);
 
@@ -150,4 +156,8 @@ interface ClassroomService
     public function tryAdminClassroom($classroomId);
 
     public function getClassroomMembersByCourseId($courseId, $userId);
+
+    public function findUserJoinedClassroomIds($userId);
+
+    public function updateLearndNumByClassroomIdAndUserId($classroomId, $userId);
 }

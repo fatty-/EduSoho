@@ -16,17 +16,23 @@ define(function(require, exports, module) {
 
         setup: function() {
         	
+            var techOrder = ['flash','html5'];
+            if(this.get("agentInWhiteList")) {
+                techOrder = ['html5', 'flash'];
+            }
+
     		var that = this;
     		var player = VideoJS(this.element.attr("id"), {
-				techOrder: ['flash','html5'],
-				autoplay: false
+				techOrder: techOrder,
+				autoplay: false,
+				loop: false
     		});
 			player.dimensions('100%', '100%');
 			player.src(this.get("url"));
 
 			player.on('error', function(error){
-			    this.set("hasPlayerError", true);
-			    var message = '您的浏览器不能播放当前视频。';
+			    that.set("hasPlayerError", true);
+			    var message = Translator.trans('您的浏览器不能播放当前视频。');
 			    Notify.danger(message, 60);
 			});
 
@@ -59,8 +65,18 @@ define(function(require, exports, module) {
 
 			this.set("player", player);
 
+			window.player = this;
+
 			LocalVideoPlayer.superclass.setup.call(this);
     	},
+
+        checkHtml5: function() {
+            if (window.applicationCache) {
+                return true;
+            } else {
+                return false;
+            }
+        },
     	
     	play: function(){
     		this.get("player").play();
@@ -71,9 +87,10 @@ define(function(require, exports, module) {
 		        return ;
 		    }
 		    var player = this.get("player");
-
-		    player.currentTime(0);
-		    player.pause();
+			player.currentTime(0);
+			/* 播放器重置时间后马上暂停没用, 延时100毫秒再执行暂停 */
+			var _ = require('underscore');
+			_.delay(_.bind(player.pause, player), 100);
         },
 
         getCurrentTime: function() {
@@ -86,7 +103,13 @@ define(function(require, exports, module) {
 
         setCurrentTime: function(time) {
 			this.get("player").currentTime(time);
+			return this;
         },
+
+		replay: function () {
+			this.setCurrentTime(0).play();
+			return this;
+		},
 
         isPlaying: function() {
         	return !this.get("player").paused();

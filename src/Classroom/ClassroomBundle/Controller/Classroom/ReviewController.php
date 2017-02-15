@@ -1,11 +1,10 @@
 <?php
 namespace Classroom\ClassroomBundle\Controller\Classroom;
 
-use Symfony\Component\HttpFoundation\Request;
-use Topxia\WebBundle\Controller\BaseController;
 use Topxia\Common\Paginator;
 use Topxia\Common\ArrayToolkit;
-use Topxia\WebBundle\Form\ClassroomReviewType;
+use Symfony\Component\HttpFoundation\Request;
+use Topxia\WebBundle\Controller\BaseController;
 
 class ReviewController extends BaseController
 {
@@ -14,21 +13,25 @@ class ReviewController extends BaseController
         $classroom = $this->getClassroomService()->getClassroom($id);
 
         $courses = $this->getClassroomService()->findActiveCoursesByClassroomId($id);
-        $coursesNum = count($courses);
 
         $user = $this->getCurrentUser();
 
-        $member = $user ? $this->getClassroomService()->getClassroomMember($classroom['id'], $user['id']) : null;
-        if(!$this->getClassroomService()->canLookClassroom($classroom['id'])){ 
-            return $this->createMessageResponse('info', '非常抱歉，您无权限访问该班级，如有需要请联系客服','',3,$this->generateUrl('homepage'));
+        $classroomSetting = $this->setting('classroom', array());
+        $classroomName    = isset($classroomSetting['name']) ? $classroomSetting['name'] : $this->trans('班级');
+
+        $member = $user['id'] ? $this->getClassroomService()->getClassroomMember($classroom['id'], $user['id']) : null;
+
+        if (!$this->getClassroomService()->canLookClassroom($classroom['id'])) {
+            return $this->createMessageResponse('info', $this->trans("非常抱歉，您无权限访问该%classroomName%，如有需要请联系客服", array('%classroomName%' => $classroomName)), '', 3, $this->generateUrl('homepage'));
         }
 
         $conditions = array(
             'classroomId' => $id,
+            'parentId'    => 0
         );
 
         $reviewsNum = $this->getClassroomReviewService()->searchReviewCount($conditions);
-        $paginator = new Paginator(
+        $paginator  = new Paginator(
             $this->get('request'),
             $reviewsNum,
             20
@@ -41,52 +44,85 @@ class ReviewController extends BaseController
             $paginator->getPerPageCount()
         );
 
-
         $reviewUserIds = ArrayToolkit::column($reviews, 'userId');
-        $reviewUsers = $this->getUserService()->findUsersByIds($reviewUserIds);
+        $reviewUsers   = $this->getUserService()->findUsersByIds($reviewUserIds);
 
         $classroom = $this->getClassroomService()->getClassroom($id);
-        $review = $this->getClassroomReviewService()->getUserClassroomReview($user['id'], $classroom['id']);
-        $layout = 'ClassroomBundle:Classroom:layout.html.twig';
+        $review    = $this->getClassroomReviewService()->getUserClassroomReview($user['id'], $classroom['id']);
+        $layout    = 'ClassroomBundle:Classroom:layout.html.twig';
 
         if ($member && !$member['locked']) {
             $layout = 'ClassroomBundle:Classroom:join-layout.html.twig';
         }
 
-        if(!$classroom){
+        if (!$classroom) {
             $classroomDescription = array();
-        }
-        else{
+        } else {
             $classroomDescription = $classroom['about'];
-            $classroomDescription = strip_tags($classroomDescription,'');
-            $classroomDescription = preg_replace("/ /","",$classroomDescription);
+            $classroomDescription = strip_tags($classroomDescription, '');
+            $classroomDescription = preg_replace("/ /", "", $classroomDescription);
         }
 
         return $this->render("ClassroomBundle:Classroom\Review:list.html.twig", array(
-            'classroom' => $classroom,
-            'courses' => $courses,
-            'paginator' => $paginator,
-            'reviewsNum' => $reviewsNum,
-            'reviews' => $reviews,
-            'userReview' => $review,
-            'reviewSaveUrl' => $this->generateUrl('classroom_review_create', array('id' => $id)),
-            'users' => $reviewUsers,
-            'member' => $member,
-            'layout' => $layout,
+            'classroom'            => $classroom,
+            'courses'              => $courses,
+            'paginator'            => $paginator,
+            'reviewsNum'           => $reviewsNum,
+            'reviews'              => $reviews,
+            'userReview'           => $review,
+            'reviewSaveUrl'        => $this->generateUrl('classroom_review_create', array('id' => $id)),
+            'users'                => $reviewUsers,
+            'member'               => $member,
+            'layout'               => $layout,
             'classroomDescription' => $classroomDescription,
-            'canReview' => $this->isClassroomMember($classroom,$user['id']),
+            'canReview'            => $this->isClassroomMember($classroom, $user['id']),
+            'targetType'           => 'classroom'
         ));
     }
 
     public function createAction(Request $request, $id)
     {
-        $user = $this->getCurrentUser();
+        $user   = $this->getCurrentUser();
         $fields = $request->request->all();
-        $fields['rating'] = $fields['rating'];
-        $fields['userId'] = $user['id'];
+
+        $fields['userId']      = $user['id'];
         $fields['classroomId'] = $id;
         $this->getClassroomReviewService()->saveReview($fields);
 
+        return $this->createJsonResponse(true);
+    }
+
+    public function postAction(Request $request, $id, $reviewId)
+    {
+        $this->getClassroomService()->tryManageClassroom($id);
+        $classroom = $this->getClassroomService()->getClassroom($id);
+
+        $postNum = $this->getClassroomReviewService()->searchReviewCount(array('parentId' => $reviewId));
+
+        if ($postNum >= 5) {
+            return $this->createJsonResponse(array('error' => $this->trans('回复数量已达5条上限，不能再回复')));
+        }
+
+        $user = $this->getCurrentUser();
+
+        $fields                = $request->request->all();
+        $fields['userId']      = $user['id'];
+        $fields['classroomId'] = $classroom['id'];
+        $fields['rating']      = 1;
+        $fields['parentId']    = $reviewId;
+
+        $post = $this->getClassroomReviewService()->saveReview($fields);
+
+        return $this->render("TopxiaWebBundle:Review/Widget:subpost-item.html.twig", array(
+            'post'      => $post,
+            'author'    => $this->getCurrentUser(),
+            'canAccess' => true
+        ));
+    }
+
+    public function deleteAction(Request $request, $reviewId)
+    {
+        $this->getClassroomReviewService()->deleteReview($reviewId);
         return $this->createJsonResponse(true);
     }
 
@@ -99,7 +135,7 @@ class ReviewController extends BaseController
             }
         }
 
-        return 0; 
+        return 0;
     }
 
     private function getClassroomService()

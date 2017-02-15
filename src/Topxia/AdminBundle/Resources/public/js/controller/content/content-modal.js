@@ -2,12 +2,12 @@ define(function(require, exports, module) {
     "use strict";
 
 	var Validator = require('bootstrap.validator');
-    require('ckeditor');
+    require('es-ckeditor');
     
     Validator.addRule(
         'noNumberFirst',
         /^[a-zA-Z]+[a-zA-Z0-9]+?$/,
-        'URL路径只能包含字母和数字,请以字母开头!长度大于2位'
+        Translator.trans('URL路径只能包含字母和数字,请以字母开头!长度大于2位')
     );
 
     var Notify = require('common/bootstrap-notify');
@@ -28,6 +28,7 @@ define(function(require, exports, module) {
         _initDatetimeFields($form);
         _changeEditor(editor);
 
+        $('[data-toggle="tooltip"]').popover();
 	};
 
     function _changeEditor(editor)
@@ -67,7 +68,7 @@ define(function(require, exports, module) {
                 }
 
                 if ($form.data('uploading')) {
-                    alert('正在上传附图，请等待附图上传成功后，再保存！');
+                    alert(Translator.trans('正在上传附图，请等待附图上传成功后，再保存！'));
                     return ;
                 }
                 
@@ -105,7 +106,8 @@ define(function(require, exports, module) {
 
         // group: 'default'
         var editor = CKEDITOR.replace('richeditor-body-field', {
-            toolbar: 'Full',
+            toolbar: 'Admin',
+            allowedContent: true,
             filebrowserImageUploadUrl: $('#richeditor-body-field').data('imageUploadUrl'),
             filebrowserFlashUploadUrl: $('#richeditor-body-field').data('flashUploadUrl'),
             height: 300

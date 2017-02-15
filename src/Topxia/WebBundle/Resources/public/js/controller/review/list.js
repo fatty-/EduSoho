@@ -2,17 +2,19 @@ define(function(require, exports, module) {
 
     var Validator = require('bootstrap.validator');
     require('jquery.raty');
+    var Notify = require('common/bootstrap-notify');
+    var ThreadShowWidget = require('../thread/thread-show.js');
 
     exports.run = function() {
 
-        Validator.addRule('star', /^[1-5]$/, '请打分');
+        Validator.addRule('star', /^[1-5]$/, Translator.trans('请打分'));
 
         var $form = $('#review-form');
 
         if ($form.length > 0) {
             $form.find('.rating-btn').raty({
                 path: $form.find('.rating-btn').data('imgPath'),
-                hints: ['很差', '较差', '还行', '推荐', '力荐'],
+                hints: [Translator.trans('很差'), Translator.trans('较差'), Translator.trans('还行'), Translator.trans('推荐'), Translator.trans('力荐')],
                 score: function() {
                     return $(this).attr('data-rating');
                 },
@@ -30,7 +32,7 @@ define(function(require, exports, module) {
                 element: $form.find('[name=rating]'),
                 required: true,
                 rule: 'star',
-                errormessageRequired: '请打分'
+                errormessageRequired: Translator.trans('请打分')
             });
 
             validator.addItem({
@@ -44,7 +46,7 @@ define(function(require, exports, module) {
                     return;
                 }
 
-                $form.find('[type=submit]').button('loading');
+                $form.find('.js-btn-save').button('loading');
 
                 $.post($form.attr('action'), $form.serialize(), function(json) {
                     $form.find('.text-success').fadeIn('fast', function(){
@@ -52,6 +54,10 @@ define(function(require, exports, module) {
                     });
                 }, 'json');
 
+            });
+
+            $form.find('.js-btn-save').on("click", function(){
+                $form.submit();
             });
 
 
@@ -72,6 +78,16 @@ define(function(require, exports, module) {
         
         var $reviews = $('.js-reviews');
 
+        $('.js-reviews').hover(function(){
+            var $fullLength = $(this).find('.full-content').text().length;
+            
+            if( $fullLength > 100 && $(this).find('.short-content').is(":hidden") == false){
+                $(this).find('.show-full-btn').show();
+            } else {
+                $(this).find('.show-full-btn').hide();
+            }
+        })
+
         $reviews.on('click', '.show-full-btn', function(){
             var $review = $(this).parents('.media');
             $review.find('.short-content').slideUp('fast', function(){
@@ -90,9 +106,24 @@ define(function(require, exports, module) {
             $review.find('.show-full-btn').show();
         });
   
-
+        var threadShowWidget = new ThreadShowWidget({
+            element: '.js-reviews',
+        });
       
-
+        threadShowWidget.undelegateEvents('.js-toggle-subpost-form', 'click');
+        $('.js-toggle-subpost-form').click(function(e){
+            e.stopPropagation();
+            
+            var postNum = $(this).closest('.thread-subpost-container').find('.thread-subpost-content .thread-subpost-list .thread-subpost').length;
+            
+            if (postNum >= 5) {
+                Notify.danger('评论回复已达5条上限，不能再回复!');
+                return;
+            }
+            var $form = $(this).parents('.thread-subpost-container').find('.thread-subpost-form');
+            $form.toggleClass('hide');
+            threadShowWidget._initSubpostForm($form);
+        })
     };
 
 });

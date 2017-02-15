@@ -25,13 +25,13 @@ admin_classroom_delete:
     defaults: { _controller: ClassroomBundle:ClassroomAdmin:deleteClassroom }
     methods: [POST]
 
+admin_classroom_category:
+    pattern: /classroom/category
+    defaults: { _controller: ClassroomBundle:Classroom/Category:index }
+
 admin_classroom_order:
     path:     /classroom/order
     defaults: { _controller: ClassroomBundle:ClassroomOrderAdmin:manage }
-
-admin_classroom_order_refunds:
-    path:     /classroom/order/refunds
-    defaults: { _controller: ClassroomBundle:ClassroomOrderAdmin:refunds }
 
 admin_classroom_thread:
     path:     /classroom/thread
@@ -49,10 +49,12 @@ admin_classroom_thread_batch_delete:
 admin_classroom_set_recommend:
     path:   /classroom/{id}/recommend
     defaults: { _controller: ClassroomBundle:ClassroomAdmin:recommend }
+    permissions: [admin_classroom_manage]
 
 admin_classroom_cancel_recommend:
     path:   /classroom/{id}/recommend/cancel
     defaults: { _controller: ClassroomBundle:ClassroomAdmin:cancelRecommend }
+    permissions: [admin_classroom_manage]
 
 admin_classroom_recommend_list:
     path:   /classroom/recommend/list
@@ -71,3 +73,7 @@ admin_classroom_review_batch_delete:
     pattern:  /classroom/review/batch_delete
     defaults: { _controller: ClassroomBundle:ClassroomReview:batchDelete }
     methods: [POST]
+
+admin_classroom_chooser:
+    pattern: /classroom/chooser
+    defaults: { _controller: ClassroomBundle:ClassroomAdmin:chooser }    

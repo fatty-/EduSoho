@@ -1,8 +1,13 @@
 define(function(require, exports, module) {
-
+    function tanslate(value, tag)
+    {
+        return '<'+tag+'>'+value+'</'+tag+'>'
+    }
     var Widget     = require('widget');
     var Handlebars = require('handlebars');
     var Notify = require('common/bootstrap-notify');
+    var Validator = require('bootstrap.validator');
+    require('common/validator-rules').inject(Validator);
     require('jquery.sortable');
 
     var TestpaperItemManager = Widget.extend({
@@ -44,6 +49,7 @@ define(function(require, exports, module) {
         },
 
         onChangeScore: function(e) {
+            this._checkItemScore();
             this.refreshTestpaperStats();
         },
 
@@ -57,32 +63,26 @@ define(function(require, exports, module) {
         },
 
         onRequestSave: function(e) {
-            var isOk = true;
-            $("#testpaper-table").find('[name="scores[]"]').each(function() {
-                var score = $(this).val();
-
-                if (score == '0') {
-                    Notify.danger('题目分值不能为0。');
-                    isOk = false;
-                    return false;
-                }
-
-                if (!/^(([1-9]{1}\d*)|([0]{1}))(\.(\d){1})?$/.test(score)) {
-                    Notify.danger('题目分值只能填写数字，且最多一位小数。');
-                    $(this).focus();
-                    isOk = false;
-                    return false;
-                }
-            });
+            
+            var isOk = this._checkItemScore();
 
             if (!isOk) {
                 return ;
             }
 
+            this.refreshPassedScoreStats();
+
+            if( $('[name="passedScore"]').length > 0){
+                var passedScoreErrorMsg = $('.passedScoreDiv').siblings('.help-block').html();
+                if ($.trim(passedScoreErrorMsg) != ''){
+                    return ;
+                }
+            }
+
             $modal = $("#testpaper-confirm-modal");
 
             var stats = this._calTestpaperStats();
-
+            
             var html='';
             $.each(stats, function(index, statsItem){
                 var tr = "<tr>";
@@ -101,18 +101,21 @@ define(function(require, exports, module) {
         refreshTestpaperStats: function() {
             var type = this.get('currentType');
             var stats = this._calTestpaperStats();
-            var html = '试卷总分<strong>' + stats.total.score.toFixed(1) + '</strong>分';
+          //  var html = Translator.trans('试卷总分')+'<strong>' + stats.total.score.toFixed(1) + '</strong>'+Translator.trans('分');
+             var html = Translator.trans('试卷总分%score%分',{score:tanslate(stats.total.score.toFixed(1),'strong')});
             html += ' <span class="stats-part">';
             if (type == 'material') {
-                html += stats[type].name + '<strong>' + stats[type].count + '</strong>子题/<strong>' + stats[type].score.toFixed(1) + '</strong>分';
+                html += stats[type].name + '<strong>' + stats[type].count + '</strong>'+Translator.trans('子题')+'/<strong>' + stats[type].score.toFixed(1) + '</strong>'+Translator.trans('分');
             } else {
-                html += stats[type].name + '<strong>' + stats[type].count + '</strong>题/<strong>' + stats[type].score.toFixed(1) + '</strong>分';
+                html += stats[type].name + '<strong>' + stats[type].count + '</strong>'+Translator.trans('题')+'/<strong>' + stats[type].score.toFixed(1) + '</strong>'+Translator.trans('分');
             }
 
             if (stats[type].missScore > 0) {
-                html += ' 漏选得分<strong>' + stats[type].missScore + '</strong>分</span>';
+                html += Translator.trans(' 漏选得分')+'<strong>' + stats[type].missScore + '</strong>'+Translator.trans('分')+'</span>';
             }
 
+            $('input[name="passedScore"]').attr('data-score-total',stats.total.score.toFixed(1));
+            $('input[name="passedScore"]').val(Math.ceil((stats.total.score * 0.6).toFixed(1)));
             $("#testpaper-stats").html(html);
         },
 
@@ -130,7 +133,7 @@ define(function(require, exports, module) {
                 });
             });
 
-            var total = {name:'总计', count:0, score:0};
+            var total = {name:Translator.trans('总计'), count:0, score:0};
             $.each(stats, function(index, statsItem) {
                 total.count += statsItem.count;
                 total.score += statsItem.score;
@@ -139,6 +142,44 @@ define(function(require, exports, module) {
             stats.total = total;
 
             return stats;
+        },
+
+        refreshPassedScoreStats: function() {
+            var hasEssay = false;
+
+            $('.testpaper-table-tbody').each(function() {
+                var self = this;
+                var tbodyType = $(this).data('type');
+
+                if (tbodyType == 'essay' || tbodyType == 'material') {
+                    $(self).find('tr').each(function() {
+                        var type = $(this).data('type');
+                        if (type == 'essay') {
+                            hasEssay = true;
+                        }
+                    })
+                }
+            })
+
+            if (hasEssay) {
+                $('input[name="passedScore"]').val('0');
+                $('.passedScoreDiv').hide();
+                validator.removeItem('[name="passedScore"]');
+            } else {
+                /*var stats = this._calTestpaperStats();
+                var passeScoreDefault = Math.ceil(stats.total.score * 0.6);
+
+                $('input[name="passedScore"]').val(passeScoreDefault);
+                $('input[name="passedScore"]').data('scoreTotal',stats.total.score);*/
+                $('.passedScoreDiv').show();
+
+                validator.addItem({
+                    element: '[name="passedScore"]',
+                    required: true,
+                    rule: 'score max{max:999}',
+                    display: Translator.trans('分数')
+                });
+            }
         },
 
         onClickPickItem: function(e) {
@@ -163,11 +204,11 @@ define(function(require, exports, module) {
             });
 
             if (ids.length == 0) {
-                Notify.danger('未选中任何题目');
+                Notify.danger(Translator.trans('未选中任何题目'));
                 return ;
             }
 
-            if (!confirm('确定要删除选中的题目吗？')) {
+            if (!confirm(Translator.trans('确定要删除选中的题目吗？'))) {
                 return ;
             }
 
@@ -181,7 +222,8 @@ define(function(require, exports, module) {
             this.$('[data-role=batch-select]:visible').prop('checked', false);
 
             this.refreshSeqs();
-            this0.refreshTestpaperStats();
+            this.refreshTestpaperStats();
+            this.refreshPassedScoreStats();
         },
 
         onClickBatchSelect: function(e) {
@@ -194,7 +236,7 @@ define(function(require, exports, module) {
 
         onClickItemDeleteBtn: function(e) {
             var $btn = $(e.target);
-            if (!confirm('您真的要删除该题目吗？')) {
+            if (!confirm(Translator.trans('您真的要删除该题目吗？'))) {
                 return ;
             }
             var $tr = $btn.parents('tr');
@@ -202,6 +244,7 @@ define(function(require, exports, module) {
             $tr.remove();
             this.refreshSeqs();
             this.refreshTestpaperStats();
+            this.refreshPassedScoreStats();
         },
 
         onClickNav: function(e) {
@@ -237,13 +280,69 @@ define(function(require, exports, module) {
                     self.refreshSeqs();
                 }
             });
+        },
+        _checkItemScore: function(){
+
+            var isOk = true;
+            if ($("#testpaper-table").find('[name="scores[]"]').length == 0) {
+                Notify.danger(Translator.trans('请选择题目。'));
+                isOk = false;
+            }
+
+            $("#testpaper-table").find('input[type="text"][name="scores[]"]').each(function() {
+                var score = $(this).val();
+
+                if (score == '0') {
+                    Notify.danger(Translator.trans('题目分值不能为0。'));
+                    isOk = false;
+                }
+
+                if (!/^(([1-9]{1}\d{0,2})|([0]{1}))(\.(\d){1})?$/.test(score)) {
+                    Notify.danger(Translator.trans('题目分值只能填写数字，并且在3位数以内，保留一位小数。'));
+                    $(this).focus();
+                    isOk = false;
+                }
+            });
+
+            return isOk;
         }
 
     });
 
     exports.run = function() {
+
+        validator = new Validator({
+                element: '#testpaper-items-form',
+                failSilently: true
+            });
+
+        Validator.addRule('score', function(options) {
+            var element = options.element;
+            var isFloat = /^[1-9][0-9]*(\.\d)?$/.test(element.val());
+            if (!isFloat){
+                return false;
+            }
+
+            if (Number(element.val()) <= Number(element.attr('data-score-total'))) {
+                return true;
+            } else {
+                return false;
+            }
+        }, Translator.trans('%display%只能是<=试卷总分、且>0的整数或者1位小数',{display:'{{display}}'}));
+
+
         new TestpaperItemManager({
-            element: '#testpaper-items-manager'
+            element: '#testpaper-items-manager',
         });
+
+        if( $('[name="passedScore"]').length > 0){
+            validator.addItem({
+                element: '[name="passedScore"]',
+                required: true,
+                rule: 'score max{max:999}',
+                display: Translator.trans('分数')
+            });
+        }
+
     }
 });

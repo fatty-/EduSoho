@@ -1,11 +1,13 @@
 define(function(require, exports, module) {
+    require("jquery.blurr");
+    var Lazyload = require('echo.js');
 
     exports.run = function() {
         $('.follow-btn').on('click', function() {
             var $this = $(this);
             $.post($this.data('url'), function() {
                 $this.hide();
-                $('.unfollow-btn').show();
+                $this.next('.unfollow-btn').show();
             });
         });
 
@@ -14,10 +16,13 @@ define(function(require, exports, module) {
             var $this = $(this);
             $.post($this.data('url'), function() {
                 $this.hide();
-                $('.follow-btn').show();
+                $this.prev('.follow-btn').show();
             });
         });
 
+        $(".user-center-header").blurr({height:220});
+
+        Lazyload.init();
 
     }
 

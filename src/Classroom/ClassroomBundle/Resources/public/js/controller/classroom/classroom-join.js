@@ -17,7 +17,7 @@ define(function(require, exports, module) {
         });
 
         $(".cancel-refund").on('click', function(){
-            if (!confirm('真的要取消退款吗？')) {
+            if (!confirm(Translator.trans('真的要取消退款吗？'))) {
                 return false;
             }
 
@@ -27,7 +27,7 @@ define(function(require, exports, module) {
         });
         
         $("#quit").on('click', function(){
-            if (!confirm('确定退出班级吗？')) {
+            if (!confirm(Translator.trans('确定退出班级吗？'))) {
                 return false;
             }
 
@@ -41,6 +41,27 @@ define(function(require, exports, module) {
             var userSign = new UserSign({
             element: '#classroom-sign',
             });
+        }
+
+        if ($('.icon-vip').length > 0) {
+           $(".icon-vip").popover({
+                trigger: 'manual',
+                placement: 'auto top',
+                html: 'true',
+                container: 'body',
+                animation: false
+            }).on("mouseenter", function () {
+                var _this = $(this);
+                _this.popover("show");
+                
+            }).on("mouseleave", function () {
+                var _this = $(this);
+                setTimeout(function () {
+                    if (!$(".popover:hover").length) {
+                        _this.popover("hide")
+                    }
+                }, 100);
+            }); 
         }
 
     };

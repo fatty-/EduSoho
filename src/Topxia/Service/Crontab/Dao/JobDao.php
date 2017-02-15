@@ -16,5 +16,9 @@ interface JobDao
 
     public function deleteJob($id);
 
+    public function deleteJobs($targetId, $targetType);
+
     public function findJobByTargetTypeAndTargetId($targetType, $targetId);
+
+    public function findJobByNameAndTargetTypeAndTargetId($jobName, $targetType, $targetId);
 }

@@ -7,8 +7,10 @@ define(function(require, exports, module) {
     var DocumentChooser = require('../widget/media-chooser/document-chooser7');
     var FlashChooser = require('../widget/media-chooser/flash-chooser');
     var Notify = require('common/bootstrap-notify');
+    var _ = require('underscore');
+    var SubtitleDialog = require('topxiawebbundle/controller/media/subtitle/dialog');
     require('jquery.sortable');
-    require('ckeditor');
+    require('es-ckeditor');
 
     function getEditorContent(editor){
         editor.updateElement();
@@ -80,26 +82,35 @@ define(function(require, exports, module) {
             }
 
             return true;
-        }, '请选择或上传{{display}}文件');
+        }, Translator.trans('请选择或上传%display%文件',{display:'{{display}}'}));
 
         Validator.addRule('timeLength', function(options) {
             return /^\d+:\d+$/.test(options.element.val())
-        }, '时长格式不正确');
+        }, Translator.trans('时长格式不正确'));
         validator = new Validator({
             element: $form,
             failSilently: true,
             autoSubmit: false
         });
 
+        var timeInterval = 5000;
+        var lastClickTime = 0;
         validator.on('formValidated', function(error, msg, $form) {
             if (error) {
                 return;
             }
             for(var i=0; i<$choosers.length; i++){
                 if($choosers[i].isUploading()){
-                    Notify.danger('文件正在上传，等待上传完后再保存。');
+                    Notify.danger(Translator.trans('文件正在上传，等待上传完后再保存。'));
                     return;
                 }
+            }
+
+            var currentTime = new Date().getTime();
+            if (currentTime - lastClickTime < timeInterval) {
+                return;
+            } else {
+                lastClickTime = currentTime;
             }
 
             $('#course-lesson-btn').button('submiting').addClass('disabled');
@@ -112,15 +123,15 @@ define(function(require, exports, module) {
                 var $parent = $('#'+$form.data('parentid'));
                 if ($item.length) {
                     $item.replaceWith(html);
-                    Notify.success('课时已保存');
+                    Notify.success(Translator.trans('课时已保存'));
                 } else {
                     $panel.find('.empty').remove();
 
                     if($parent.length){
                         var add = 0;
-                        if($parent.hasClass('item-chapter  clearfix')){
+                        if($parent.hasClass('js-chapter')){
                             $parent.nextAll().each(function(){
-                                if($(this).hasClass('item-chapter  clearfix')){
+                                if($(this).hasClass('js-chapter')){
                                     $(this).before(html);
                                     add = 1;
                                     return false;
@@ -133,12 +144,12 @@ define(function(require, exports, module) {
 
                         }else{
                              $parent.nextAll().each(function() {
-                                if($(this).hasClass('item-chapter  clearfix')){
+                                if($(this).hasClass('js-chapter')){
                                     $(this).before(html);
                                     add = 1;
                                     return false;
                                 }
-                                if($(this).hasClass('item-chapter item-chapter-unit clearfix')){
+                                if($(this).hasClass('item-chapter-unit')){
                                     $(this).before(html);
                                     add = 1;
                                     return false;
@@ -153,7 +164,7 @@ define(function(require, exports, module) {
                     }else{
                         $("#course-item-list").append(html);
                     }
-                    Notify.success('添加课时成功');
+                    Notify.success(Translator.trans('添加课时成功'));
                 }
                 $(id).find('.btn-link').tooltip();
                 $form.parents('.modal').modal('hide');
@@ -170,6 +181,7 @@ define(function(require, exports, module) {
         validator.removeItem('#lesson-media-field');
         validator.removeItem('#lesson-second-field');
         validator.removeItem('#lesson-minute-field');
+        validator.removeItem('#lesson-suggest-period-field');
 
         validator.addItem({
             element: '#lesson-title-field',
@@ -189,21 +201,21 @@ define(function(require, exports, module) {
                     element: '#lesson-media-field',
                     required: true,
                     rule: 'mediaValueEmpty',
-                    display: type == 'video' ? '视频' : '音频'
+                    display: type == 'video' ? Translator.trans('视频') : Translator.trans('音频')
                 });
 
                 validator.addItem({
                     element: '#lesson-minute-field',
                     required: true,
-                    rule: 'integer',
-                    display: '时长'
+                    rule: 'unsigned_integer',
+                    display: Translator.trans('时长')
                 });
 
                 validator.addItem({
                     element: '#lesson-second-field',
                     required: true,
                     rule: 'second_range',
-                    display: '时长'
+                    display: Translator.trans('时长')
                 });
 
                 break;
@@ -227,11 +239,18 @@ define(function(require, exports, module) {
                     element: '#lesson-media-field',
                     required: true,
                     rule: 'mediaValueEmpty',
-                    display: '文档'
+                    display: Translator.trans('文档')
                 });
                 break;
         }
-
+        if ($('#lesson-suggest-period-field').length > 0){
+            validator.addItem({
+                element: '#lesson-suggest-period-field',
+                required: true,
+                rule: 'arithmetic_number',
+                display: Translator.trans('建议学习时长')
+            });
+        }
     }
 
     exports.run = function() {
@@ -244,9 +263,9 @@ define(function(require, exports, module) {
         function getTmpContents(){
             var date = new Date(); //日期对象
             var now = "";
-            now = now + date.getHours()+"时";
-            now = now + date.getMinutes()+"分";
-            now = now + date.getSeconds()+"秒";
+            now = now + date.getHours()+Translator.trans('时');
+            now = now + date.getMinutes()+Translator.trans('分');
+            now = now + date.getSeconds()+Translator.trans('秒');
             tmpContents["title"] = $("#lesson-title-field").val();
             tmpContents["summary"] = $("#lesson-summary-field").val();
             tmpContents["courseId"]  = $("#course-lesson-form").data("courseId");
@@ -257,14 +276,14 @@ define(function(require, exports, module) {
 
             var lessonId = 0;
             if(compare(tmpContents, localContent)){
-                var titleName = "添加课时";
+                var titleName = Translator.trans('添加课时');
                 if(tmpContents["lessonId"] != undefined){
-                    titleName = "编辑课时";
+                    titleName = Translator.trans('编辑课时');
                     lessonId = tmpContents["lessonId"];
                 }
                 $.post($form.data("createDraftUrl"), tmpContents, function(data){
                     localContent = objClone(tmpContents);
-                    $(".modal-title").text(titleName + '(草稿已于' + tmpContents['createdTime'] + '保存)');
+                    $(".modal-title").text(titleName + Translator.trans('(草稿已于%createdTime%保存)',{createdTime:tmpContents['createdTime']}));
                 });
             }
         }
@@ -276,9 +295,12 @@ define(function(require, exports, module) {
             }
             var minute = parseInt(length / 60);
             var second = length - minute * 60;
+            var hour = length / 3600;
+            var multiple = Math.ceil(hour / 0.5)*0.5;
 
             $("#lesson-minute-field").val(minute);
             $("#lesson-second-field").val(second);
+
         }
 
         var $content = $("#lesson-content-field");
@@ -288,74 +310,113 @@ define(function(require, exports, module) {
         
         var videoChooser = new VideoChooser({
             element: '#video-chooser',
-            choosed: choosedMedia
+            choosed: choosedMedia,
+            fileSingleSizeLimit:1024 * 1024 * 1024 * 2 //2G
         });
 
         var audioChooser = new AudioChooser({
             element: '#audio-chooser',
-            choosed: choosedMedia
+            choosed: choosedMedia,
+            fileSingleSizeLimit:1024 * 1024 * 500 //500M
         });
 
         var pptChooser = new PPTChooser({
             element: '#ppt-chooser',
-            choosed: choosedMedia
+            choosed: choosedMedia,
+            fileSingleSizeLimit:1024 * 1024 * 100  //100M
         });
 
         var documentChooser = new DocumentChooser({
             element: '#document-chooser',
-            choosed: choosedMedia
+            choosed: choosedMedia,
+            fileSingleSizeLimit:1024 * 1024 * 100  //100M
         });
         var flashChooser = new FlashChooser({
             element: '#flash-chooser',
-            choosed: choosedMedia
+            choosed: choosedMedia,
+            fileSingleSizeLimit:1024 * 1024 * 100  //100M
         });
+
+        var fillTitle = function(name) {
+            var $title = $form.find('[name=title]');
+            if ($title.val().length > 0) {
+                return ;
+            }
+
+            $title.val(name.substring(0, name.lastIndexOf('.')));
+        };
+
+        /**
+         * 视频字幕
+         */
+        var subtitleDialog = {
+            renderHTML: function() {
+            },
+            destroy: function() {
+            }
+        };
+        if ($('.js-subtitle-list').length > 0) {
+            subtitleDialog = new SubtitleDialog({
+                element: '.js-subtitle-list'
+            });
+
+            //显示字幕编辑组件
+            subtitleDialog.renderHTML(choosedMedia);
+        }
 
         videoChooser.on('change', function(item) {
             var value = item ? JSON.stringify(item) : '';
             $form.find('[name="media"]').val(value);
+
             updateDuration(item.length);
-            var $title = $form.find('[id="lesson-title-field"]');
-            if($title.val()==""){
-                var ext = "." + item.name.replace(/.+\./, "");
-                var filenameNoExt = item.name.replace(ext, "");
-                $title.val(filenameNoExt);
-            }
+            fillTitle(item.name);
+            subtitleDialog.renderHTML(item);
         });
 
         audioChooser.on('change', function(item) {
             var value = item ? JSON.stringify(item) : '';
             $form.find('[name="media"]').val(value);
+
             updateDuration(item.length);
-            var $title = $form.find('[id="lesson-title-field"]');
-            if($title.val()==""){
-                var ext = "." + item.name.replace(/.+\./, "");
-                var filenameNoExt = item.name.replace(ext, "");
-                $title.val(filenameNoExt);
-            }
+            fillTitle(item.name);
+
         });
 
         pptChooser.on('change', function(item) {
             var value = item ? JSON.stringify(item) : '';
             $form.find('[name="media"]').val(value);
+            fillTitle(item.name);
         });
 
         documentChooser.on('change', function(item) {
             var value = item ? JSON.stringify(item) : '';
             $form.find('[name="media"]').val(value);
+            fillTitle(item.name);
         });
 
         flashChooser.on('change', function(item) {
             var value = item ? JSON.stringify(item) : '';
             $form.find('[name="media"]').val(value);
+            fillTitle(item.name);
         });
 
         $('.modal').unbind("hide.bs.modal");
         $(".modal").on("hide.bs.modal", function(){
-            videoChooser.destroy();
-            audioChooser.destroy();
-            pptChooser.destroy();
-            documentChooser.destroy();
-            flashChooser.destroy();
+            var choosers = [videoChooser,pptChooser,audioChooser,documentChooser,flashChooser];
+            var isUploading = _.some(choosers, function (chooser) {
+                return chooser.isUploading();
+            });
+
+            if(isUploading){
+                Notify.danger(Translator.trans('文件正在上传，等待上传完后再保存。'));
+                return false;
+            }
+
+            subtitleDialog.destroy();
+
+            _.each(choosers, function (chooser) {
+                 chooser.destroy();
+            });
         });
 
         var validator = createValidator($form, [videoChooser,pptChooser,audioChooser,documentChooser,flashChooser]);
@@ -371,39 +432,39 @@ define(function(require, exports, module) {
             }
 
             if (type == 'video') {
-                videoChooser.show();
                 audioChooser.hide();
                 pptChooser.hide();
                 documentChooser.hide();
                 flashChooser.hide();
+                videoChooser.show();
                 clearInterval(Timer);
             } else if (type == 'audio') {
-                audioChooser.show();
                 videoChooser.hide();
                 pptChooser.hide();
                 documentChooser.hide();
                 flashChooser.hide();
+                audioChooser.show();
                 clearInterval(Timer);
             } else if (type == 'ppt') {
-                pptChooser.show();
                 videoChooser.hide();
                 audioChooser.hide();
                 documentChooser.hide();
                 flashChooser.hide();
+                pptChooser.show();
                 clearInterval(Timer);
             } else if (type == 'document') {
-                documentChooser.show();
                 pptChooser.hide();
                 videoChooser.hide();
                 audioChooser.hide();
                 flashChooser.hide();
+                documentChooser.show();
                 clearInterval(Timer);
             } else if (type == 'flash') {
-                flashChooser.show();
                 documentChooser.hide();
                 pptChooser.hide();
                 videoChooser.hide();
                 audioChooser.hide();
+                flashChooser.show();
                 clearInterval(Timer);
             }
 
@@ -423,11 +484,10 @@ define(function(require, exports, module) {
             toolbar: 'Full',
             filebrowserImageUploadUrl: $('#lesson-content-field').data('imageUploadUrl'),
             filebrowserFlashUploadUrl: $('#lesson-content-field').data('flashUploadUrl'),
+            allowedContent: true,
             height: 300
         });
 
-
-        
         validator.on('formValidate', function(elemetn, event) {
             var content = getEditorContent(editor);
             $content.val(content);
@@ -459,5 +519,26 @@ define(function(require, exports, module) {
             $("#see-draft-btn").hide();
         });
         
+        $('#lesson-suggest-period-field').bind('blur',function(){
+            var val = $(this).val();
+            if (isNaN(val)) {
+                return false;
+            }
+            var multiple = Math.ceil(val / 0.5)*0.5;
+            var temp = val > multiple ? (multiple+0.5) : multiple;
+            $(this).val(temp.toFixed(1));
+        })
+
+        $('.js-free-lesson-data-popover').popover({
+            html: true,
+            trigger: 'hover',
+            placement: 'bottom',
+            template: '<div class="popover tata-popover tata-popover-lg" role="tooltip"><div class="arrow"></div><h3 class="popover-title"></h3><div class="popover-content"></div></div>',
+            content: function() {
+
+                var html = $(this).siblings('.popover-content').html();
+                return html;
+            }
+        });
     };
 });

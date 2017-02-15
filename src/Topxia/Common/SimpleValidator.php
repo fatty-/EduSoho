@@ -11,22 +11,27 @@ class SimpleValidator
     {
         $value = (string) $value;
         $valid = filter_var($value, FILTER_VALIDATE_EMAIL);
-        return $valid !== false ;
+        return $valid !== false;
     }
 
     public static function nickname($value, array $option = array())
     {
-        
         $option = array_merge(
             array('minLength' => 4, 'maxLength' => 18),
             $option
         );
 
         $len = (strlen($value) + mb_strlen($value, 'utf-8')) / 2;
+
         if ($len > $option['maxLength'] || $len < $option['minLength']) {
             return false;
         }
-        return !!preg_match('/^[\x{4e00}-\x{9fa5}a-zA-z0-9_.]+$/u', $value);
+
+        if (preg_match('/^1\d{10}$/', $value)) {
+            return false;
+        }
+
+        return !!preg_match('/^[\x{4e00}-\x{9fa5}a-zA-z0-9_.·]+$/u', $value);
     }
 
     public static function password($value, array $option = array())
@@ -34,9 +39,25 @@ class SimpleValidator
         return !!preg_match('/^[\S]{5,20}$/u', $value);
     }
 
-    public static function truename($value)
+    //真实姓名改成和nickname一样
+    public static function truename($value, array $option = array())
     {
-        return !!preg_match('/^[\x{4e00}-\x{9fa5}]{2,5}$/u', $value);
+        $option = array_merge(
+            array('minLength' => 4, 'maxLength' => 18),
+            $option
+        );
+
+        $len = (strlen($value) + mb_strlen($value, 'utf-8')) / 2;
+
+        if ($len > $option['maxLength'] || $len < $option['minLength']) {
+            return false;
+        }
+
+        if (preg_match('/^1\d{10}$/', $value)) {
+            return false;
+        }
+
+        return !!preg_match('/^[\x{4e00}-\x{9fa5}a-zA-z_.·]+$/u', $value);
     }
 
     public static function idcard($value)
@@ -92,6 +113,11 @@ class SimpleValidator
     public static function site($value)
     {
         return !!preg_match('/^(http|https):\/\/(\w+:{0,1}\w*@)?(\S+)(:[0-9]+)?(\/|\/([\w#!:.?+=&%@!\-\/]))?$/', $value);
+    }
+
+    public static function chineseAndAlphanumeric($value)
+    {
+        return (bool)preg_match('/^([\x{4e00}-\x{9fa5}]|[a-zA-Z0-9_.·])*$/u', $value);
     }
 
 }

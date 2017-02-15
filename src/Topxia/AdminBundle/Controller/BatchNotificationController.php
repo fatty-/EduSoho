@@ -41,14 +41,16 @@ class BatchNotificationController extends BaseController
             $batchnotification['title'] = empty($batchnotification['title']) ? '' : $batchnotification['title'];
             if(empty($batchnotification['title']))
             {
-                $this->createMessageResponse('error','群发标题为空');
+                $this->createMessageResponse('error',$this->getServiceKernel()->trans('群发标题为空'));
             }
             $batchnotification['createdTime'] = time();
-            if($batchnotification['type'] == 'publish'){
+            if($batchnotification['mode'] == 'publish'){
+                unset($batchnotification['mode']);
                 $batchnotification = $this->getBatchNotificationService()->createBatchNotification($batchnotification);
                 $this->getBatchNotificationService()->publishBatchNotification($batchnotification['id']);
             }else{
                 //（可扩展）默认发送全站私信，可改成群发某个组或者班级成员等
+                unset($batchnotification['mode']);
                 $batchnotification = $this->getBatchNotificationService()->createBatchNotification($batchnotification);
             }
             return $this->redirect($this->generateUrl('admin_batch_notification'));
@@ -62,14 +64,16 @@ class BatchNotificationController extends BaseController
         $user = $this->getCurrentUser();
         $batchnotification = $this->getBatchNotificationService()->getBatchNotification($id);
         if (empty($batchnotification)) {
-            throw $this->createNotFoundException('通知已删除！');
+            throw $this->createNotFoundException($this->getServiceKernel()->trans('通知已删除！'));
         }
         if ($request->getMethod() == 'POST') {
             $formData = $request->request->all();
-            if($formData['type'] == 'publish'){
+            if($formData['mode'] == 'publish'){
+                unset($formData['mode']);
                 $batchnotification = $this->getBatchNotificationService()->updateBatchNotification($id, $formData);
                 $batchnotification = $this->getBatchNotificationService()->publishBatchNotification($id);
             }else{
+                unset($formData['mode']);
                 $batchnotification = $this->getBatchNotificationService()->updateBatchNotification($id, $formData);
             }
             return $this->redirect($this->generateUrl('admin_batch_notification'));
@@ -82,7 +86,7 @@ class BatchNotificationController extends BaseController
     {
         $batchnotification = $this->getBatchNotificationService()->getBatchNotification($id);
         if (empty($batchnotification)) {
-            throw $this->createNotFoundException('通知已删除！');
+            throw $this->createNotFoundException($this->getServiceKernel()->trans('通知已删除！'));
         }
         $batchnotification['published'] = $batchnotification['published'] == 0 ? 1 : 0;
         if(!$batchnotification['published'])
@@ -112,7 +116,7 @@ class BatchNotificationController extends BaseController
         $batchnotification = $this->getBatchNotificationService()->getBatchNotification($id);
         if (empty($batchnotification)) {
             
-            throw $this->createNotFoundException('通知已被管理员删除！');
+            throw $this->createNotFoundException($this->getServiceKernel()->trans('通知已被管理员删除！'));
         }
         return $this->render('TopxiaAdminBundle:Notification:notification-modal.html.twig',array(
             'batchnotification' => $batchnotification

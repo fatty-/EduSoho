@@ -1,6 +1,6 @@
 {% extends 'TopxiaAdminBundle::layout.html.twig' %}
 
-{% set menu = 'admin_operation_block' %}
+{% set menu = menu|default('admin_block') %}
 
 {% set script_controller = 'block/list' %}
 {% block main %}
@@ -8,25 +8,25 @@
 <table id="block-table" class="table table-striped">
   <thead>
     <tr>
-      <th width="50%">标题</th>
-      <th width="25%">最近更新</th>
-      <th width="25%">操作</th>
+      <th width="50%">{{'标题'|trans}}</th>
+      <th width="25%">{{'最近更新'|trans}}</th>
+      <th width="25%">{{'操作'|trans}}</th>
     </tr>
   </thead>
   <tbody>
-    {% if blocks %}
-      {% for block in blocks %}
-        {% set latestHistory = latestHistories[block.id]|default(null) %}
+    {% if blockTemplates %}
+      {% for blockTemplate in blockTemplates %}
+        {% set latestHistory = latestHistories[blockTemplate.id]|default(null) %}
         {% set latestUpdateUser = users[latestHistory.userId|default(null)]|default(null) %}
         {% include 'TopxiaAdminBundle:Block:list-tr.html.twig' %}
         
       {% endfor %}
   {% else %}
-        <tr><td colspan="20"><div class="empty">暂无编辑区记录</div></td></tr>
+        <tr><td colspan="20"><div class="empty">{{'暂无编辑区记录'|trans}}</div></td></tr>
   {% endif %}
    </tbody>
 </table>
- {{ web_macro.paginator(paginator) }} 
+ {{ admin_macro.paginator(paginator) }} 
  <style>
 .form-control.quicksearch{
   display:inline;

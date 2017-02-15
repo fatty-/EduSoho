@@ -2,11 +2,12 @@ define(function(require, exports, module) {
 
     var Widget = require('widget');
     var Handlebars = require('handlebars');
+     require('webuploader');
     var Validator = require('bootstrap.validator');
     var Notify = require('common/bootstrap-notify');
     require('common/validator-rules').inject(Validator);
-    require('webuploader');
-    require('ckeditor');
+    require('es-ckeditor');
+    var UploadQuestionAttachments = require('../../quiz-question/upload-question-attachments');
 
     var QuestionCreator = Widget.extend({
         attrs: {
@@ -16,7 +17,7 @@ define(function(require, exports, module) {
         },
 
         events: {
-            'click [data-role=submit]': 'onSubmit'
+            'click [data-role=submit]': 'onSubmit',
         },
 
         setup: function() {
@@ -24,7 +25,32 @@ define(function(require, exports, module) {
             this._initForm();
             this._initStemField();
             this._initAnalysisField();
+            
         },
+
+        _initBatchAttachmentUploader: function(editor){
+
+                    
+                $("#cloud-btn", "#question-attachment").on('click',function(){
+                    var url="";
+                    if($(this).data("storage")!='cloud' || typeof(FileReader)=="undefined" || typeof(XMLHttpRequest)=="undefined"){
+                        url = $(this).data("normalUrl");
+                    } else {
+                        url = $(this).data("html5Url");
+                    }
+                    $("#modal").html('');
+                    $("#modal").modal('show');
+                    $.get(url, function(html){
+                        $("#modal").html(html);
+                        var uploadQuestionAttachments = new UploadQuestionAttachments({
+                             editor:editor
+                        });
+                   
+                    });
+                })
+              
+        },
+
 
         onSubmit: function(e){
             var submitType = $(e.currentTarget).data('submission');
@@ -34,6 +60,7 @@ define(function(require, exports, module) {
         _initAnalysisField: function() {
             var editor = CKEDITOR.replace('question-analysis-field', {
                 toolbar: 'Minimal',
+                filebrowserImageUploadUrl: $('#question-analysis-field').data('imageUploadUrl'),
                 height: 120
             });
 
@@ -41,43 +68,6 @@ define(function(require, exports, module) {
                 editor.updateElement();
             });
 
-            var uploader = WebUploader.create({
-                swf: require.resolve("webuploader").match(/[^?#]*\//)[0] + "Uploader.swf",
-                server: this.element.data('uploadUrl'),
-                pick: '#question-analysis-uploader',
-                formData: {'_csrf_token': $('meta[name=csrf-token]').attr('content') },
-                accept: {
-                    title: 'Images',
-                    extensions: 'gif,jpg,jpeg,png',
-                    mimeTypes: 'image/*'
-                }
-
-            });
-
-            uploader.on( 'fileQueued', function( file ) {
-                Notify.info('正在上传，请稍等！', 0);
-                uploader.upload();
-            });
-
-            uploader.on( 'uploadSuccess', function( file, response ) {
-                Notify.success('上传成功！', 1);
-                var result = '[image]' + response.hashId + '[/image]';
-                editor.insertHtml(result);
-            });
-
-            uploader.on( 'uploadError', function( file, response ) {
-                Notify.danger('上传失败，请重试！');
-            });
-
-            uploader.disable();
-
-            this.$('#advanced-collapse').on('shown.bs.collapse', function(){
-                uploader.enable();
-            });
-
-            this.$('#advanced-collapse').on('hidden.bs.collapse', function(){
-                uploader.disable();
-            });
 
         },
 
@@ -92,89 +82,11 @@ define(function(require, exports, module) {
                 height: height
             });
 
+            self._initBatchAttachmentUploader(editor);
+
             this.get('validator').on('formValidate', function(elemetn, event) {
                 editor.updateElement();
             });
-
-            var uploader = WebUploader.create({
-                swf: require.resolve("webuploader").match(/[^?#]*\//)[0] + "Uploader.swf",
-                server: this.element.data('uploadUrl'),
-                pick: '#question-stem-uploader',
-                formData: {'_csrf_token': $('meta[name=csrf-token]').attr('content') },
-                accept: {
-                    title: 'Images',
-                    extensions: 'gif,jpg,jpeg,png',
-                    mimeTypes: 'image/*'
-                }
-            });
-
-            uploader.on( 'fileQueued', function( file ) {
-                Notify.info('正在上传，请稍等！', 0);
-                uploader.upload();
-            });
-
-            uploader.on( 'uploadSuccess', function( file, response ) {
-                Notify.success('上传成功！', 1);
-                var result = '[image]' + response.hashId + '[/image]';
-                editor.insertHtml(result);
-            });
-
-            uploader.on( 'uploadError', function( file, response ) {
-                Notify.danger('上传失败，请重试！');
-            });
-
-            if ($('#question-stem-audio-uploader').length) {
-                /**
-                 * 音频上传
-                 */
-                var audioUploader = WebUploader.create({
-                    swf: require.resolve("webuploader").match(/[^?#]*\//)[0] + "Uploader.swf",
-                    pick: '#question-stem-audio-uploader',
-                    formData: {'_csrf_token': $('meta[name=csrf-token]').attr('content') },
-                    accept: {
-                        title: 'Audio',
-                        extensions: 'mp3,wav',
-                        mimeTypes: 'audio/*'
-                    }
-                });
-
-                audioUploader.on( 'fileQueued', function( file, a, b ) {
-                    Notify.info('正在上传，请稍等！', 0);
-
-                    $.ajax({
-                        url: self.element.data('mediaUploadParamsUrl'),
-                        async: false,
-                        dataType: 'json',
-                        data: {convertor: 'audio'},
-                        cache: false,
-                        success: function(response, status, jqXHR) {
-                            audioUploader.option('server', response.url)
-                            audioUploader.option('formData', response.postParams);
-                        },
-                        error: function(jqXHR, status, error) {
-                            Notify.danger('请求上传授权码失败！');
-                        }
-                    });
-
-                    audioUploader.upload();
-                });
-
-                audioUploader.on( 'uploadSuccess', function( file, response ) {
-                    Notify.success('上传成功！', 1);
-
-                    $.post(self.element.data('mediaUploadCallbackUrl'), response, function(response) {
-                        var name = response.filename.match(/[^\.]*\./)[0].slice(0, -1);
-                        var result = '[audio id="' + response.id +'"]' + name + '[/audio]';
-                        editor.insertHtml(result);
-                    });
-
-                });
-
-                audioUploader.on( 'uploadError', function( file, response ) {
-                    Notify.danger('上传失败，请重试！');
-                });
-            }
-
         },
 
         _initForm: function() {
@@ -186,11 +98,12 @@ define(function(require, exports, module) {
         _createValidator: function($form){
             var self = this;
 
-            Validator.addRule('score',/^(\d){1,10}$/i, '请输入正确的分值');
+            Validator.addRule('score',/^(\d){1,10}$/i, Translator.trans('请输入正确的分值'));
 
             validator = new Validator({
                 element: $form,
-                autoSubmit: false
+                autoSubmit: false,
+                autoFocus: false
             });
 
             validator.addItem({
@@ -201,7 +114,7 @@ define(function(require, exports, module) {
             validator.addItem({
                 element: '#question-score-field',
                 required: false,
-                rule:'number'
+                rule:'number max{max:999}'
             });
 
             validator.on('formValidated', function(error, msg, $form) {
@@ -215,7 +128,7 @@ define(function(require, exports, module) {
             });
 
             return validator;
-        }
+        },
 
     });
 

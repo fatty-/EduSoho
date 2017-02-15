@@ -1,33 +1,36 @@
 <?php
 namespace Topxia\WebBundle\Controller;
 
-use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
-use Symfony\Component\HttpFoundation\ResponseHeaderBag;
-
-use Topxia\Common\ArrayToolkit;
-use Topxia\Common\FileToolkit;
 use Topxia\Common\Paginator;
-use Topxia\Service\Util\CloudClientFactory;
+use Topxia\Common\ArrayToolkit;
+use Symfony\Component\HttpFoundation\Request;
 
 class CourseMaterialController extends CourseBaseController
 {
     public function indexAction(Request $request, $id)
     {
         list($course, $member, $response) = $this->buildLayoutDataWithTakenAccess($request, $id);
+
         if ($response) {
             return $response;
         }
 
+        $conditions = array(
+            'courseId'        => $id,
+            'excludeLessonId' => 0,
+            'source'          => 'coursematerial',
+            'type'            => 'course'
+        );
+
         $paginator = new Paginator(
             $request,
-            $this->getMaterialService()->getMaterialCount($id),
+            $this->getMaterialService()->searchMaterialCount($conditions),
             20
         );
 
-        $materials = $this->getMaterialService()->findCourseMaterials(
-            $id,
+        $materials = $this->getMaterialService()->searchMaterials(
+            $conditions,
+            array('createdTime', 'DESC'),
             $paginator->getOffsetCount(),
             $paginator->getPerPageCount()
         );
@@ -36,11 +39,11 @@ class CourseMaterialController extends CourseBaseController
         $lessons = ArrayToolkit::index($lessons, 'id');
 
         return $this->render("TopxiaWebBundle:CourseMaterial:index.html.twig", array(
-            'course' => $course,
-            'member' => $member,
-            'lessons'=>$lessons,
+            'course'    => $course,
+            'member'    => $member,
+            'lessons'   => $lessons,
             'materials' => $materials,
-            'paginator' => $paginator,
+            'paginator' => $paginator
         ));
     }
 
@@ -49,32 +52,37 @@ class CourseMaterialController extends CourseBaseController
         list($course, $member) = $this->getCourseService()->tryTakeCourse($courseId);
 
         if ($member && !$this->getCourseService()->isMemberNonExpired($course, $member)) {
-            return $this->redirect($this->generateUrl('course_materials',array('id' => $courseId)));
+            return $this->redirect($this->generateUrl('course_materials', array('id' => $courseId)));
         }
 
         if ($member && $member['levelId'] > 0) {
-            if ($this->getVipService()->checkUserInMemberLevel($member['userId'], $course['vipLevelId']) != 'ok') {
-                return $this->redirect($this->generateUrl('course_show',array('id' => $id)));
+            if(empty($course['vipLevelId'])) {
+                return $this->redirect($this->generateUrl('course_show', array('id' => $course['id'])));
+            } elseif (empty($course['parentId']) 
+                && $this->isVipPluginEnabled()
+                && $this->getVipService()->checkUserInMemberLevel($member['userId'], $course['vipLevelId']) != 'ok') {
+                return $this->redirect($this->generateUrl('course_show', array('id' => $course['id'])));
+            } elseif (!empty($course['parentId'])) {
+                $classroom        = $this->getClassroomService()->getClassroomByCourseId($course['id']);
+                if(!empty($classroom) 
+                    && $this->isVipPluginEnabled()
+                    && $this->getVipService()->checkUserInMemberLevel($member['userId'], $classroom['vipLevelId']) != 'ok') {
+                    return $this->redirect($this->generateUrl('course_show', array('id' => $course['id'])));
+                }
             }
         }
 
         $material = $this->getMaterialService()->getMaterial($courseId, $materialId);
+
         if (empty($material)) {
             throw $this->createNotFoundException();
         }
 
-        $file = $this->getUploadFileService()->getFile($material['fileId']);
-        if (empty($file)) {
-            throw $this->createNotFoundException();
+        if ($material['source'] == 'courselesson' || !$material['lessonId']) {
+            return $this->createMessageResponse('error', $this->trans('无权下载该资料'));
         }
 
-        if ($file['storage'] == 'cloud') {
-            $factory = new CloudClientFactory();
-            $client = $factory->createClient();
-            $client->download($client->getBucket(), $file['hashId'], 3600, $file['filename']);
-        } else {
-            return $this->createPrivateFileDownloadResponse($request, $file);
-        }
+        return $this->forward('TopxiaWebBundle:UploadFile:download', array('fileId' => $material['fileId']));
     }
 
     public function deleteAction(Request $request, $id, $materialId)
@@ -83,6 +91,11 @@ class CourseMaterialController extends CourseBaseController
 
         $this->getCourseService()->deleteCourseMaterial($id, $materialId);
         return $this->createJsonResponse(true);
+    }
+
+    protected function isVipPluginEnabled()
+    {
+        return $this->isPluginInstalled('Vip') && $this->setting('vip.enabled');
     }
 
     protected function getMaterialService()
@@ -100,24 +113,8 @@ class CourseMaterialController extends CourseBaseController
         return $this->getServiceKernel()->createService('Vip:Vip.VipService');
     }
 
-    protected function createPrivateFileDownloadResponse(Request $request, $file)
+    protected function getClassroomService()
     {
-
-        $response = BinaryFileResponse::create($file['fullpath'], 200, array(), false);
-        $response->trustXSendfileTypeHeader();
-
-        $file['filename'] = urlencode($file['filename']);
-        if (preg_match("/MSIE/i", $request->headers->get('User-Agent'))) {
-            $response->headers->set('Content-Disposition', 'attachment; filename="'.$file['filename'].'"');
-        } else {
-            $response->headers->set('Content-Disposition', "attachment; filename*=UTF-8''".$file['filename']);
-        }
-
-        $mimeType = FileToolkit::getMimeTypeByExtension($file['ext']);
-        if ($mimeType) {
-            $response->headers->set('Content-Type', $mimeType);
-        }
-
-        return $response;
+        return $this->getServiceKernel()->createService('Classroom:Classroom.ClassroomService');
     }
 }

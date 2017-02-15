@@ -1,6 +1,6 @@
 define(function(require, exports, module) {
 
-    require('ckeditor');
+    require('es-ckeditor');
     var Uploader = require('upload');
     var Validator = require('bootstrap.validator');
     require('common/validator-rules').inject(Validator);
@@ -11,7 +11,7 @@ define(function(require, exports, module) {
         });
         // group: 'default'
         var ckeditor=CKEDITOR.replace('richeditor-body-field', {
-            toolbar: 'Full',
+            toolbar: 'Admin',
             filebrowserImageUploadUrl: $('#richeditor-body-field').data('imageUploadUrl'),
             filebrowserFlashUploadUrl: $('#richeditor-body-field').data('flashUploadUrl'),
             height: 300
@@ -38,11 +38,11 @@ define(function(require, exports, module) {
             }
             if($('#hidden').val() == 'publish'){
                 $('#notification-operate-publish').button('loading').addClass('disabled');
-                Notify.success('发布成功！');
+                Notify.success(Translator.trans('发布成功！'));
             }
             else{
                 $('#notification-operate-save').button('loading').addClass('disabled');
-                Notify.success('保存成功！');
+                Notify.success(Translator.trans('保存成功！'));
             }
         });
      }; 

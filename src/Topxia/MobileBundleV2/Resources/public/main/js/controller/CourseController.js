@@ -20,7 +20,7 @@ function CourseReviewController($scope, $stateParams, CourseService, ClassRoomSe
   this.loadCourseReviews = function(callback) {
     CourseService.getReviews({
       start : $scope.start,
-      limit : 10,
+      limit : 50,
       courseId : $stateParams.targetId
     }, callback);
   };
@@ -28,7 +28,7 @@ function CourseReviewController($scope, $stateParams, CourseService, ClassRoomSe
   this.loadClassRoomReviews = function(callback) {
     ClassRoomService.getReviews({
       start : $scope.start,
-      limit : 10,
+      limit : 50,
       classRoomId : $stateParams.targetId
     }, callback);
   };
@@ -46,7 +46,7 @@ function CourseReviewController($scope, $stateParams, CourseService, ClassRoomSe
   this.loadReviews = function() {
     self.targetService(function(data) {
       var length  = data ? data.data.length : 0;
-      if (!data || length == 0 || length < 10) {
+      if (!data || length == 0 || length < 50) {
           $scope.canLoad = false;
       }
 
@@ -116,9 +116,9 @@ function CourseDetailController($scope, $stateParams, CourseService)
   });
 }
 
-app.controller('CourseToolController', ['$scope', '$stateParams', 'OrderService', 'CourseService', 'cordovaUtil', '$state', CourseToolController]);
+app.controller('CourseToolController', ['$scope', '$stateParams', 'OrderService', 'CourseService', 'UserService', 'cordovaUtil', '$state', CourseToolController]);
 
-function BaseToolController($scope, OrderService, cordovaUtil)
+function BaseToolController($scope, OrderService, UserService, cordovaUtil)
 {
   var self = this;
 
@@ -146,16 +146,23 @@ function BaseToolController($scope, OrderService, cordovaUtil)
       });
     }
 
-  this.vipLeand = function(callback) {
+  this.vipLeand = function(vipLevelId, callback) {
     if ($scope.user == null) {
       cordovaUtil.openWebView(app.rootPath + "#/login/course");
       return;
     }
-    if ($scope.user.vip == null || $scope.user.vip.levelId < $scope.course.vipLevelId) {
-      cordovaUtil.openWebView(app.rootPath + "#/viplist");
-      return;
-    }
-    callback();
+    
+    $scope.showLoad();
+    UserService.getUserInfo({
+      userId : $scope.user.id,
+    }, function(data) {
+      $scope.hideLoad();
+      if (data.vip == null || data.vip.levelId < vipLevelId) {
+        cordovaUtil.openWebView(app.rootPath + "#/viplist");
+      } else {
+        callback();
+      }
+    });
   }
 
   this.join = function(callback) {
@@ -187,17 +194,34 @@ function BaseToolController($scope, OrderService, cordovaUtil)
       
       return "";
   }
+
+  this.filterContent = function(content, limit) {
+
+    content = content.replace(/<\/?[^>]*>/g,'');
+    content = content.replace(/[\r\n\s]+/g,'');
+    if (content.length > limit) {
+         content = content.substring(0, limit);
+      }
+      
+      return content;
+  }
+
+  $scope.isCanShowVip = function(vipLevelId) {
+    if (vipLevelId <= 0) {
+      return false;
+    }
+    return $scope.vipLevels.length > 0;
+  }
 }
 
-function CourseToolController($scope, $stateParams, OrderService, CourseService, cordovaUtil, $state)
+function CourseToolController($scope, $stateParams, OrderService, CourseService, UserService, cordovaUtil, $state)
 {
-    this.__proto__ = new BaseToolController($scope, OrderService, cordovaUtil);
+    this.__proto__ = new BaseToolController($scope, OrderService, UserService, cordovaUtil);
     var self = this;
 
     this.goToPay = function() {
       var course = $scope.course;
-      var priceType = course.priceType;
-      var price = "Coin" == priceType ? course.coinPrice : course.price;
+      var price = course.price;
       if (price <= 0) {
         self.payCourse(price, "course", $stateParams.courseId);
       } else {
@@ -260,7 +284,7 @@ function CourseToolController($scope, $stateParams, OrderService, CourseService,
     };
 
     $scope.vipLeand = function() {
-      self.vipLeand(function() {
+      self.vipLeand($scope.course.vipLevelId, function() {
         CourseService.vipLearn({
           courseId : $stateParams.courseId
         }, function(data){
@@ -307,13 +331,11 @@ function CourseToolController($scope, $stateParams, OrderService, CourseService,
 
     $scope.shardCourse = function() {
       var about = $scope.course.about;
-      if (about.length > 20) {
-        about = about.substring(0, 20);
-      }
+
       cordovaUtil.share(
         app.host + "/course/" + $scope.course.id, 
         $scope.course.title, 
-        about, 
+        self.filterContent(about, 20), 
         $scope.course.largePicture
       );      
     }
@@ -348,6 +370,7 @@ function CourseController($scope, $stateParams, CourseService, AppUtil, $state, 
       $scope.member = data.member;
       $scope.isFavorited = data.userFavorited;
       $scope.discount = data.discount;
+      $scope.teachers = data.course.teachers;
 
       if (data.member) {
         var progress = data.course.lessonNum == 0 ? 0 : data.member.learnedNum / data.course.lessonNum;
@@ -363,6 +386,7 @@ function CourseController($scope, $stateParams, CourseService, AppUtil, $state, 
         courseId : $stateParams.courseId,
         limit : 1
       }, function(data) {
+        $scope.reviewCount = data.total;
         $scope.reviews = data.data;
       });
     }
@@ -389,22 +413,47 @@ function CourseController($scope, $stateParams, CourseService, AppUtil, $state, 
     $scope.$parent.$on("refresh", function(event, data) {
       window.location.reload();
     });
+
+    $scope.isCanShowConsultBtn = function() {
+      if (! $scope.user) {
+        return false;
+      }
+      
+      if ("classroom" == $scope.course.source) {
+        return false;
+      }
+
+      if (!$scope.teachers || $scope.teachers.length == 0) {
+        return false;
+      }
+
+      return true;
+    };
+
+    $scope.consultCourseTeacher = function() {
+      if (!$scope.teachers || $scope.teachers.length == 0) {
+        alert("该课程暂无教师");
+        return;
+      }
+
+      var userId = $scope.teachers[0].id;
+      cordovaUtil.startAppView("courseConsult", { userId : userId });
+    };
 }
 
 app.controller('ClassRoomController', ['$scope', '$stateParams', 'ClassRoomService', 'AppUtil', '$state', 'cordovaUtil', 'ClassRoomUtil', ClassRoomController]);
 app.controller('ClassRoomCoursesController', ['$scope', '$stateParams', 'ClassRoomService', '$state', ClassRoomCoursesController]);
-app.controller('ClassRoomToolController', ['$scope', '$stateParams', 'OrderService', 'ClassRoomService', 'cordovaUtil', '$state', ClassRoomToolController]);
+app.controller('ClassRoomToolController', ['$scope', '$stateParams', 'OrderService', 'ClassRoomService', 'UserService', 'cordovaUtil', '$state', ClassRoomToolController]);
 
-function ClassRoomToolController($scope, $stateParams, OrderService, ClassRoomService, cordovaUtil, $state)
+function ClassRoomToolController($scope, $stateParams, OrderService, ClassRoomService, UserService, cordovaUtil, $state)
 {
-  this.__proto__ = new BaseToolController($scope, OrderService, cordovaUtil);
+  this.__proto__ = new BaseToolController($scope, OrderService, UserService, cordovaUtil);
     var self = this;
 
     $scope.signDate = new Date();
     this.goToPay = function() {
       var classRoom = $scope.classRoom;
-      var priceType = classRoom.priceType;
-      var price = "Coin" == priceType ? classRoom.coinPrice : classRoom.price;
+      var price = classRoom.price;
       if (price <= 0) {
         self.payCourse(price, "classroom", $stateParams.classRoomId);
       } else {
@@ -445,19 +494,17 @@ function ClassRoomToolController($scope, $stateParams, OrderService, ClassRoomSe
 
     $scope.shardClassRoom = function() {
       var about = $scope.classRoom.about;
-      if (about.length > 20) {
-        about = about.substring(0, 20);
-      }
+
       cordovaUtil.share(
         app.host + "/classroom/" + $scope.classRoom.id, 
         $scope.classRoom.title, 
-        about, 
+        self.filterContent(about, 20), 
         $scope.classRoom.largePicture
       );
     };
 
     $scope.learnByVip = function() {
-      self.vipLeand(function() {
+      self.vipLeand($scope.classRoom.vipLevelId, function() {
         ClassRoomService.learnByVip({
           classRoomId : $stateParams.classRoomId
         }, function(data){
@@ -536,7 +583,22 @@ function ClassRoomController($scope, $stateParams, ClassRoomService, AppUtil, $s
       classRoomId : $stateParams.classRoomId,
       limit : 3
     }, function(data) {
-      $scope.students = data.data;
+      $scope.students = data.resources;
+    });
+  };
+
+  $scope.loadTeachers = function() {
+    ClassRoomService.getTeachers({
+      classRoomId : $stateParams.classRoomId,
+    }, function(data) {
+      if (data && data.length > 1) {
+        var length = data.length;
+        for (var i = 2; i < length; i++) {
+          data.pop();
+        };
+      }
+
+      $scope.classRoom.teachers = data;
     });
   };
 
@@ -557,4 +619,15 @@ function ClassRoomController($scope, $stateParams, ClassRoomService, AppUtil, $s
     }
 
   this.loadClassRoom();
+}
+
+app.controller('CourseCardController', ['$scope', '$stateParams', 'CourseService', CourseCardController]);
+function CourseCardController($scope, $stateParams, CourseService)
+{
+
+  CourseService.getCourse({
+    courseId : $stateParams.courseId
+  }, function(data) {
+    $scope.course = data.course;
+  });
 }

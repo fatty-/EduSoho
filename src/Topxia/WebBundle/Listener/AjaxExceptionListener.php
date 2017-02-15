@@ -1,18 +1,16 @@
 <?php
- 
-namespace Topxia\WebBundle\Listener;
- 
-use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\HttpKernel\Event\GetResponseForExceptionEvent;
-use Symfony\Component\DependencyInjection\ContainerInterface;
 
+namespace Topxia\WebBundle\Listener;
+
+use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Event\GetResponseForExceptionEvent;
 use Topxia\Service\Common\ServiceKernel;
-use Topxia\Service\Common\AccessDeniedException;
- 
+
 class AjaxExceptionListener
 {
-    public function __construct($container)
+    public function __construct(ContainerInterface $container)
     {
         $this->container = $container;
     }
@@ -22,8 +20,8 @@ class AjaxExceptionListener
         $problem = $this->container->get('Topxia.RepairProblem', ContainerInterface::NULL_ON_INVALID_REFERENCE);
         $exception = $event->getException();
         $request = $event->getRequest();
- 
-        if (! $request->isXmlHttpRequest()) {
+
+        if (!$request->isXmlHttpRequest()) {
             return;
         }
 
@@ -33,45 +31,40 @@ class AjaxExceptionListener
             $result = ob_get_contents();
             ob_end_clean();
             $event->setResponse(new JsonResponse(array('result' => $result)));
-            return ;
+            return;
         }
 
-        if ($exception instanceof AccessDeniedException) {
-            $statusCode = 403;
-        } else {
-            $statusCode = $exception->getCode();
-            if (!array_key_exists($statusCode, Response::$statusTexts)) {
-                $statusCode = 500;
-            }
+        $statusCode = $exception->getCode();
 
-            if ($this->container->get('kernel')->isDebug()) {
-                $error = array('name' => 'Error', 'message' => $exception->getMessage());
-            } else {
-                $error = array('name' => 'Error', 'message' => 'Error');
-                $this->getServiceKernel()->createService('System.LogService')->error('ajax', 'exception', $exception->getMessage());
-            }
+        if (!array_key_exists($statusCode, Response::$statusTexts)) {
+            $statusCode = 500;
+        }
+
+        $error = array('name' => 'Error', 'message' => $exception->getMessage());
+        if (!$this->container->get('kernel')->isDebug()) {
+            $this->getServiceKernel()->createService('System.LogService')->error('ajax', 'exception', $exception->getMessage());
         }
 
         if ($statusCode == 403) {
             $user = $this->getUser($event);
             if ($user) {
-                $error = array('name' => 'AccessDenied', 'message' => '访问被拒绝！');
+                $error = array('name' => 'AccessDenied', 'message' => $this->getServiceKernel()->trans('访问被拒绝！'));
             } else {
-                $error = array('name' => 'Unlogin', 'message' => '当前操作，需要登录！');
+                $error = array('name' => 'Unlogin', 'message' => $this->getServiceKernel()->trans('当前操作，需要登录！'));
             }
-        } 
+        }
 
-        $response = new JsonResponse(array('error' => $error) , $statusCode);
+        $response = new JsonResponse(array('error' => $error), $statusCode);
         $event->setResponse($response);
     }
 
     public function getUser()
     {
-        if (!$this->container->has('security.context')) {
+        if (!$this->container->has('security.token_storage')) {
             throw new \LogicException('The SecurityBundle is not registered in your application.');
         }
 
-        if (null === $token = $this->container->get('security.context')->getToken()) {
+        if (null === $token = $this->container->get('security.token_storage')->getToken()) {
             return null;
         }
 

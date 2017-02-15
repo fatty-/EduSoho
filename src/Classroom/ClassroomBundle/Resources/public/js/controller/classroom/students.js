@@ -9,21 +9,26 @@ define(function(require, exports, module) {
         $list.on('click', '.student-remove', function(){
             var $tr = $(this).parents('tr');
             var user_name = $('.student-remove').data('user') ;
-            if (!confirm('您真的要移除该'+user_name+'吗？')) {
+            if (!confirm(Translator.trans('您真的要移除该%username%吗？',{username:user_name}))) {
                 return ;
             }
 
             $.post($(this).data('url'), function(){
             	var user_name = $('.student-remove').data('user') ;
-                Notify.success('移除'+user_name+'成功！');
+                Notify.success(Translator.trans('移除%username%成功！',{username:user_name}));
                 $tr.remove();
             }).error(function(){
             	var user_name = $('.student-remove').data('user') ;
-                Notify.danger('移除'+user_name+'失败，请重试！');
+                Notify.danger(Translator.trans('移除%username%失败，请重试！',{username:user_name}));
             });
         });
 
-
+        $("#refund-coin-tips").popover({
+            html: true,
+            trigger: 'hover',//'hover','click'
+            placement: 'left',//'bottom',
+            content: $("#refund-coin-tips-html").html()
+        });
 
         $("#course-student-list").on('click', '.follow-student-btn, .unfollow-student-btn', function() {
             
@@ -40,6 +45,31 @@ define(function(require, exports, module) {
             
         });
 
+        $('#export-students-btn').on('click', function(){
+            $('#export-students-btn').button('loading');
+            $.get($('#export-students-btn').data('datasUrl'), {start:0}, function(response) {
+                if (response.status === 'getData') {
+                    exportStudents(response.start, response.fileName);
+                } else {
+                    $('#export-students-btn').button('reset');
+                    location.href = $('#export-students-btn').data('url')+'&fileName='+response.fileName;
+                }
+            });
+        });
+    }
+
+    function exportStudents(start, fileName) {
+        var start = start || 0,
+            fileName = fileName || '';
+
+        $.get($('#export-students-btn').data('datasUrl'), {start:start, fileName:fileName}, function(response) {
+            if (response.status === 'getData') {
+                exportStudents(response.start, response.fileName);
+            } else {
+                $('#export-students-btn').button('reset');
+                location.href = $('#export-students-btn').data('url')+'&fileName='+response.fileName;
+            }
+        });
     }
 
 });

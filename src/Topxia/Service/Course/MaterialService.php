@@ -3,25 +3,36 @@ namespace Topxia\Service\Course;
 
 interface MaterialService
 {
-	public function uploadMaterial($material);
+    public function uploadMaterial($material);
 
-	public function deleteMaterial($courseId, $materialId);
+    public function addMaterial($fields, $argument);
 
-	public function deleteMaterialByMaterialId($materialId);
+    public function updateMaterial($id, $fields, $argument);
 
-	public function deleteMaterialsByLessonId($lessonId);
+    public function deleteMaterial($courseId, $materialId);
 
-	public function deleteMaterialsByCourseId($courseId);
+    public function deleteMaterialsByLessonId($lessonId, $courseType='course');
 
-	public function getMaterial($courseId, $materialId);
+    public function deleteMaterialsByCourseId($courseId, $courseType='course');
 
-	public function findCourseMaterials($courseId, $start, $limit);
+    public function deleteMaterials($courseId, $fileIds, $courseType);
 
-	public function findLessonMaterials($lessonId, $start, $limit);
+    public function deleteMaterialsByFileId($fileId);
 
-	public function findMaterialsByCopyIdAndLockedCourseIds($pId, $courseIds);
+    public function getMaterial($courseId, $materialId);
 
-	public function getMaterialCount($courseId);
+    public function findMaterialsByCopyIdAndLockedCourseIds($copyId, $courseIds);
 
-	public function getMaterialCountByFileId($fileId);
+    public function searchMaterials($conditions, $orderBy, $start, $limit);
+
+    public function searchMaterialCount($conditions);
+
+    public function searchMaterialsGroupByFileId($conditions, $orderBy, $start, $limit);
+
+    public function searchMaterialCountGroupByFileId($conditions);
+
+    public function findUsedCourseMaterials($fileIds, $courseId);
+
+    public function findFullFilesAndSort($materials);
+
 }

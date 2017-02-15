@@ -19,19 +19,24 @@ define(function(require, exports, module) {
                 }
             });
         }
+        
         Lazyload.init();
 
-        $("#course-list").on('click','.js-course-filter',function(){
-             var $btn = $(this);
-             $.get($btn.data('url'),function(html){
-               $('#course-list').html(html);
-               Lazyload.init();
-               $(".tooltip").remove();
-               $('[data-toggle="tooltip"]').tooltip({container: 'body'});
+        $("body").on('click','.js-course-filter',function(){
+            var $btn = $(this);
+            var courseType = $btn.data('type');
+            var text = $('.course-filter .visible-xs .active a').text();
+            $.get($btn.data('url'),function(html){
+                $('#'+courseType+'-list-section').after(html).remove();
+                var parent = $btn.parent();
+                if(!parent.hasClass('course-sort')){
+                   text = $btn.find("a").text();   
+                }
+            $('.course-filter .visible-xs .btn').html(text+" "+'<span class="caret"></span>');
+                Lazyload.init();
             })
         })
 
-    
 
         $('.recommend-teacher').on('click', '.teacher-item .follow-btn', function(){
             var $btn = $(this);

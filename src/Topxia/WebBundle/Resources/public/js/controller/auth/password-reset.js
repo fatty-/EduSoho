@@ -63,20 +63,30 @@ define(function(require, exports, module) {
                     required: true,
                     triggerType: 'submit',
                     rule: 'integer fixedLength{len:6} remote',
-                    display: '短信验证码'           
+                    display: Translator.trans('短信验证码')           
                 });
 
                 if (('undefined' != typeof smsSender)&&("undefined" != typeof smsSender.destroy)){
                     smsSender.destroy();
                 }
             }
+        };
+
+        if($('.js-find-password li').length > 1){
+            $('.js-find-by-email').click(function(){
+                if(!$('.js-find-by-email').hasClass('active')){
+                    $('#alertxx').hide();
+                }
+            });
+            $('.js-find-by-mobile').click(function(){
+                if(!$('.js-find-by-mobile').hasClass('active')){
+                    $('#alertxx').hide();
+                }
+            });
         }
 
-        
-
-
         makeValidator('email');
-        $('.js-find-by-email').mouseover(function () {
+        $('.js-find-by-email').click(function () {
             $('.js-find-by-email').addClass('active');
             $('.js-find-by-mobile').removeClass('active');
 
@@ -85,7 +95,7 @@ define(function(require, exports, module) {
             $('#password-reset-form').show();
         })
 
-        $('.js-find-by-mobile').mouseover(function () {
+        $('.js-find-by-mobile').click(function () {
             $('.js-find-by-email').removeClass('active');
             $('.js-find-by-mobile').addClass('active');
 

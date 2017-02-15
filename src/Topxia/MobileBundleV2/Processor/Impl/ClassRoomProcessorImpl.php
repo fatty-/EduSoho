@@ -356,7 +356,7 @@ class ClassRoomProcessorImpl extends BaseProcessor implements ClassRoomProcessor
 	public function learnByVip()
 	{
 		$classRoomId = $this->getParam("classRoomId");
-		if (!$this->controller->setting('vip.enabled')) {
+		if (!$this->controller->isinstalledPlugin('Vip') || !$this->controller->setting('vip.enabled')) {
         	return $this->createErrorResponse('not_login', "网校未开启会员体系");
     	}
 
@@ -400,14 +400,14 @@ class ClassRoomProcessorImpl extends BaseProcessor implements ClassRoomProcessor
         $userId = empty($user) ? 0 : $user["id"];
         $member = $user ? $this->getClassroomService()->getClassroomMember($classroom['id'], $userId) : null;
 		$vipLevels = array();
-    	if ($this->controller->setting('vip.enabled')) {
+    	if ($this->controller->isinstalledPlugin('Vip') && $this->controller->setting('vip.enabled')) {
         	$vipLevels = $this->controller->getLevelService()->searchLevels(array(
             		'enabled' => 1
         	), 0, 100);
     	}
 
     	$checkMemberLevelResult = null;
-    	if ($this->controller->setting('vip.enabled')) {
+    	if ($this->controller->isinstalledPlugin('Vip') && $this->controller->setting('vip.enabled')) {
         	$classroomMemberLevel = $classroom['vipLevelId'] > 0 ? $this->controller->getLevelService()->getLevel($classroom['vipLevelId']) : null;
     	}
 
@@ -553,12 +553,12 @@ class ClassRoomProcessorImpl extends BaseProcessor implements ClassRoomProcessor
 	        $progresses = array();
 	        $classrooms=array();
 
-	        $studentClassrooms=$this->getClassroomService()->searchMembers(array('role'=>'student','userId'=>$user->id),array('createdTime','desc'),0,9999);
-	        $auditorClassrooms=$this->getClassroomService()->searchMembers(array('role'=>'auditor','userId'=>$user->id),array('createdTime','desc'),0,9999);
+	        $studentClassrooms=$this->getClassroomService()->searchMembers(array('role'=>'student','userId'=>$user->id),array('createdTime','desc'),0,PHP_INT_MAX);
+	        $auditorClassrooms=$this->getClassroomService()->searchMembers(array('role'=>'auditor','userId'=>$user->id),array('createdTime','desc'),0,PHP_INT_MAX);
 
 	        $total  = 0;
-	        $total += $this->getClassroomService()->searchMemberCount(array('role'=>'student','userId'=>$user->id),array('createdTime','desc'),0,9999);
-	        $total += $this->getClassroomService()->searchMemberCount(array('role'=>'auditor','userId'=>$user->id),array('createdTime','desc'),0,9999);
+	        $total += $this->getClassroomService()->searchMemberCount(array('role'=>'student','userId'=>$user->id),array('createdTime','desc'),0,PHP_INT_MAX);
+	        $total += $this->getClassroomService()->searchMemberCount(array('role'=>'auditor','userId'=>$user->id),array('createdTime','desc'),0,PHP_INT_MAX);
 	        
 	        $classrooms=array_merge($studentClassrooms,$auditorClassrooms);
 
@@ -604,7 +604,6 @@ class ClassRoomProcessorImpl extends BaseProcessor implements ClassRoomProcessor
 			unset($classroom["about"]);
 			unset($classroom["teacherIds"]);
 			unset($classroom["service"]);
-			$classroom["createdTime"] = date("c", $classroom["createdTime"]);
 			return $classroom;
 		}, $classrooms);
 	}
@@ -657,11 +656,12 @@ class ClassRoomProcessorImpl extends BaseProcessor implements ClassRoomProcessor
             $conditions['categoryIds'] = $categoryIds;
         }
 
+        $conditions['recommended'] = ($sort == 'recommendedSeq') ? 1 : null;
         $total = $this->getClassroomService()->searchClassroomsCount($conditions);
 
         $classrooms = $this->getClassroomService()->searchClassrooms(
                 $conditions,
-                array($sort,'desc'),
+                array($sort, 'desc'),
                 $start,
                 $limit
         );

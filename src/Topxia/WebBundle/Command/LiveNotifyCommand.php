@@ -20,7 +20,8 @@ class LiveNotifyCommand extends BaseCommand
 	protected function execute(InputInterface $input, OutputInterface $output)
 	{
 		$this->initServiceKernel();
-		$connection = $this->getContainer()->get('database_connection');
+        $biz = $this->getContainer()->get('biz');
+		$connection = $biz['db'];
 
 		$tomorrow = date("Y-m-d",strtotime("+1 day"));
 
@@ -92,20 +93,6 @@ class LiveNotifyCommand extends BaseCommand
 	protected function getUserService()
 	{
 		return $this->getServiceKernel()->createService('User.UserService');
-	}
-
-	private function initServiceKernel()
-	{
-		$serviceKernel = ServiceKernel::create('dev', false);
-		$serviceKernel->setConnection($this->getContainer()->get('database_connection'));
-		$currentUser = new CurrentUser();
-		$currentUser->fromArray(array(
-		    'id' => 1,
-		    'nickname' => '测试管理员',
-		    'currentIp' =>  '127.0.0.1',
-		    'roles' => array("ROLE_SUPER_ADMIN"),
-		));
-		$serviceKernel->setCurrentUser($currentUser);
 	}
 
 }

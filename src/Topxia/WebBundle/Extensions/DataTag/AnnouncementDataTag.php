@@ -23,7 +23,11 @@ class AnnouncementDataTag extends BaseDataTag implements DataTag
     {   
         $this->checkCount($arguments);
 
-        $conditions = array('targetType'=>'global', 'startTime'=>time(), 'endTime'=>time());
+        $currentTime = time();
+
+        // $currentTime = $currentTime - $currentTime%900;
+
+        $conditions  = $this->fillOrgCode(array('targetType'=>'global', 'startTime'=>$currentTime, 'endTime'=>$currentTime));
 
         $announcement = $this->getAnnouncementService()->searchAnnouncements($conditions,array('createdTime','DESC'), 0, $arguments['count']);
         
@@ -38,10 +42,10 @@ class AnnouncementDataTag extends BaseDataTag implements DataTag
     protected function checkCount(array $arguments)
     {
         if (empty($arguments['count'])) {
-            throw new \InvalidArgumentException("count参数缺失");
+            throw new \InvalidArgumentException($this->getServiceKernel()->trans('count参数缺失'));
         }
         if ($arguments['count'] > 100) {
-            throw new \InvalidArgumentException("count参数超出最大取值范围");
+            throw new \InvalidArgumentException($this->getServiceKernel()->trans('count参数超出最大取值范围'));
         }
     }
 }

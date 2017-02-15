@@ -16,7 +16,7 @@ class GenerateCourseCommand extends BaseCommand
 
     protected function configure()
     {
-        $this->setName ( 'generate:course' )
+        $this->setName ( 'util:generate-course' )
         ->addArgument('count',InputArgument::OPTIONAL)
         ->addArgument('price', InputArgument::OPTIONAL)
         ->setDescription('第一个参数为创建课程数量(默认为50),第二个参数为价格(默认为随即)');
@@ -30,7 +30,7 @@ class GenerateCourseCommand extends BaseCommand
         $this->getCourseDao()->getConnection()->beginTransaction();
         try {
             for ($i=0; $i < $count; $i++) {
-                $price = $input->getArgument('price', raund(0, 100));
+                $price = $input->getArgument('price', rand(0, 100));
                 $course['title'] = '课程-'.$price.'元-'.time().'-'.$i;
                 $course['status'] = 'published';
                 $course['about'] = '';
@@ -58,16 +58,6 @@ class GenerateCourseCommand extends BaseCommand
             throw $e;
         }
         $output->writeln('<info>初始化课程数据完毕</info>');
-    }
-
-    private function initServiceKernel()
-    {
-        $serviceKernel = ServiceKernel::create('dev', false);
-        $serviceKernel->setParameterBag($this->getContainer()->getParameterBag());
-
-        $serviceKernel->setConnection($this->getContainer()->get('database_connection'));
-        $user = $this->getUserService()->getUser(1);
-        $serviceKernel->setCurrentUser($user);
     }
 
     protected function getUserService()

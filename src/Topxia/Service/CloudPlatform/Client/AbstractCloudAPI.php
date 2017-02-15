@@ -2,6 +2,7 @@
 namespace Topxia\Service\CloudPlatform\Client;
 
 use Psr\Log\LoggerInterface;
+use Topxia\Service\Common\ServiceKernel;
 
 class AbstractCloudAPI
 {
@@ -26,12 +27,14 @@ class AbstractCloudAPI
         if (!empty($options['apiUrl'])) {
             $this->setApiUrl($options['apiUrl']);
         }
+
         $this->debug = empty($options['debug']) ? false : true;
     }
 
     public function setApiUrl($url)
     {
         $this->apiUrl = rtrim($url, '/');
+
         return $this;
     }
 
@@ -81,10 +84,16 @@ class AbstractCloudAPI
 
     protected function _request($method, $uri, $params, $headers)
     {
-        $requestId = substr(md5(uniqid('', true)), -16);
+		$requestId = substr(md5(uniqid('', true)), -16);
 
-        $url = $this->apiUrl . '/' . self::VERSION . $uri;
-        $this->debug && $this->logger && $this->logger->debug("[{$requestId}] {$method} {$url}", array('params' => $params, 'headers' => $headers));
+        $url = $this->apiUrl.'/'.self::VERSION.$uri;
+
+        if ($this->isWithoutNetwork()) {
+            if ($this->debug && $this->logger) {
+                $this->logger->debug("NetWork Off, So Block:[{$requestId}] {$method} {$url}", array('params' => $params, 'headers' => $headers));
+            }
+            return array('network' => 'off');
+        }
 
         $headers[] = 'Content-type: application/json';
 
@@ -100,31 +109,32 @@ class AbstractCloudAPI
         if ($method == 'POST') {
             curl_setopt($curl, CURLOPT_POST, 1);
             curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode($params));
-        } else if ($method == 'PUT') {
+        } elseif ($method == 'PUT') {
             curl_setopt($curl, CURLOPT_CUSTOMREQUEST, 'PUT');
             curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode($params));
-        } else if ($method == 'DELETE') {
+        } elseif ($method == 'DELETE') {
             curl_setopt($curl, CURLOPT_CUSTOMREQUEST, 'DELETE');
             curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode($params));
-        } else if ($method == 'PATCH') {
+        } elseif ($method == 'PATCH') {
             curl_setopt($curl, CURLOPT_CUSTOMREQUEST, 'PATCH');
             curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode($params));
         } else {
             if (!empty($params)) {
-                $url = $url . (strpos($url, '?') ? '&' : '?') . http_build_query($params);
+                $url = $url.(strpos($url, '?') ? '&' : '?').http_build_query($params);
             }
         }
 
-        $headers[] = 'Auth-Token: ' . $this->_makeAuthToken($url, $method == 'GET' ? array() : $params);
-        $headers[] = 'API-REQUEST-ID: '. $requestId;
+        $headers[] = 'Auth-Token: '.$this->_makeAuthToken($url, $method == 'GET' ? array() : $params);
+        $headers[] = 'API-REQUEST-ID: '.$requestId;
 
         curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($curl, CURLOPT_URL, $url);
 
         $response = curl_exec($curl);
         $curlinfo = curl_getinfo($curl);
+
         $header = substr($response, 0, $curlinfo['header_size']);
-        $body = substr($response, $curlinfo['header_size']);
+        $body   = substr($response, $curlinfo['header_size']);
 
         $this->debug && $this->logger && $this->logger->debug("[{$requestId}] CURL_INFO", $curlinfo);
         $this->debug && $this->logger && $this->logger->debug("[{$requestId}] RESPONSE_HEADER {$header}");
@@ -134,9 +144,13 @@ class AbstractCloudAPI
 
         $context = array(
             'CURLINFO' => $curlinfo,
-            'HEADER' => $header,
-            'BODY' => $body,
+            'HEADER'   => $header,
+            'BODY'     => $body
         );
+
+        if (empty($curlinfo['namelookup_time'])) {
+            $this->logger && $this->logger->error("[{$requestId}] NAME_LOOK_UP_TIMEOUT", $context);
+        }
 
         if (empty($curlinfo['connect_time'])) {
             $this->logger && $this->logger->error("[{$requestId}] API_CONNECT_TIMEOUT", $context);
@@ -155,9 +169,13 @@ class AbstractCloudAPI
 
         $result = json_decode($body, true);
 
-        if (empty($result)) {
+        if (is_null($result)) {
             $this->logger && $this->logger->error("[{$requestId}] RESPONSE_JSON_DECODE_ERROR", $context);
             throw new CloudAPIIOException("Api result json decode error: (url:{$url}).");
+        }
+
+        if ($this->debug && $this->logger) {
+            $this->logger->debug("[{$requestId}] {$method} {$url}", array('params' => $params, 'headers' => $headers));
         }
 
         return $result;
@@ -166,15 +184,22 @@ class AbstractCloudAPI
     protected function _makeAuthToken($url, $params)
     {
         $matched = preg_match('/:\/\/.*?(\/.*)$/', $url, $matches);
+
         if (!$matched) {
             throw new \RuntimeException('Make AuthToken Error.');
         }
 
-        $text = $matches[1] . "\n" . json_encode($params) . "\n" . $this->secretKey;
+        $text = $matches[1]."\n".json_encode($params)."\n".$this->secretKey;
 
         $hash = md5($text);
 
         return "{$this->accessKey}:{$hash}";
     }
 
+    protected function isWithoutNetwork()
+    {
+        $developer = ServiceKernel::instance()->createService('System.SettingService')->get('developer');
+
+        return empty($developer['without_network']) ? false : (bool) $developer['without_network'];
+    }
 }

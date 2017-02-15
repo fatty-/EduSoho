@@ -6,10 +6,7 @@ define(function(require, exports, module) {
 
     exports.run = function() {
 
-        require('./header').run();
-
         $("#startDate").datetimepicker({
-            language: 'zh-CN',
             autoclose: true
         }).on('hide', function(ev){
             validator.query('#startDate').execute();
@@ -24,7 +21,6 @@ define(function(require, exports, module) {
 
 
         $("#endDate").datetimepicker({
-            language: 'zh-CN',
             autoclose: true
         }).on('hide', function(ev){
             validator.query('#endDate').execute();
